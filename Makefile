@@ -1,5 +1,6 @@
 export CONFIG_MHI_BUS=m
 export CONFIG_MHI_UCI=m
+export CONFIG_MHI_NET_MBIM=m
 export CONFIG_MHI_BUS_PCI_GENERIC=m
 export CONFIG_MHI_BUS_DEBUG=y
 
@@ -14,6 +15,7 @@ install: modules
 	cp ${PWD}/drivers/bus/mhi/core/mhi.ko /lib/modules/$(shell uname -r)/kernel/drivers/bus/mhi/core
 	cp ${PWD}/drivers/bus/mhi/mhi_pci_generic.ko /lib/modules/$(shell uname -r)/kernel/drivers/bus/mhi
 	cp ${PWD}/drivers/bus/mhi/mhi_uci.ko /lib/modules/$(shell uname -r)/kernel/drivers/bus/mhi
+	cp ${PWD}/drivers/bus/mhi/mhi_net_mbim.ko /lib/modules/$(shell uname -r)/kernel/drivers/bus/mhi
 	depmod
 
 uninstall: clean
