@@ -10,9 +10,10 @@ modules: clean
 	$(MAKE) -C $(KDIR) M=$(PWD)/drivers/bus/mhi modules
 
 install: modules
-	cp ${PWD}/drivers/bus/mhi/core/mhi.ko /lib/modules/$(shell uname -r)/kernel/drivers/mhi/core
-	cp ${PWD}/drivers/bus/mhi/mhi_pci_generic.ko /lib/modules/$(shell uname -r)/kernel/drivers/mhi
-	cp ${PWD}/drivers/bus/mhi/mhi_uci.ko /lib/modules/$(shell uname -r)/kernel/drivers/mhi
+	mkdir -p /lib/modules/$(shell uname -r)/kernel/drivers/bus/mhi/core
+	cp ${PWD}/drivers/bus/mhi/core/mhi.ko /lib/modules/$(shell uname -r)/kernel/drivers/bus/mhi/core
+	cp ${PWD}/drivers/bus/mhi/mhi_pci_generic.ko /lib/modules/$(shell uname -r)/kernel/drivers/bus/mhi
+	cp ${PWD}/drivers/bus/mhi/mhi_uci.ko /lib/modules/$(shell uname -r)/kernel/drivers/bus/mhi
 	depmod
 
 uninstall: clean
