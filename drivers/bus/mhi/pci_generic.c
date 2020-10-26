@@ -140,7 +140,40 @@ static const struct mhi_pci_dev_info mhi_qcom_sdx55_info = {
 	.dma_data_width = 32
 };
 
+static const struct mhi_channel_config modem_quectel_v1_mhi_channels[] = {
+	MHI_CHANNEL_CONFIG_UL(0, "LOOPBACK", 16, 0),
+	MHI_CHANNEL_CONFIG_DL(1, "LOOPBACK", 16, 0),
+	MHI_CHANNEL_CONFIG_UL(4, "DIAG", 16, 0),
+	MHI_CHANNEL_CONFIG_DL(5, "DIAG", 16, 0),
+	MHI_CHANNEL_CONFIG_UL(12, "MBIM", 16, 0),
+	MHI_CHANNEL_CONFIG_DL(13, "MBIM", 16, 0),
+	MHI_CHANNEL_CONFIG_UL(32, "DUN", 16, 0),
+	MHI_CHANNEL_CONFIG_DL(33, "DUN", 16, 0),
+	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0", 512, 1),
+	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0", 512, 2),
+};
+
+static const struct mhi_controller_config modem_quectel_v1_mhiv_config = {
+	.max_channels = 128,
+	.timeout_ms = 5000,
+	.num_channels = ARRAY_SIZE(modem_quectel_v1_mhi_channels),
+	.ch_cfg = modem_quectel_v1_mhi_channels,
+	.num_events = ARRAY_SIZE(modem_qcom_v1_mhi_events),
+	.event_cfg = modem_qcom_v1_mhi_events,
+};
+
+static const struct mhi_pci_dev_info mhi_quectel_sdx55_info = {
+	.name = "qcom-sdx55m",
+	.fw = "qcom/sdx55m/sbl1.mbn",
+	.edl = "qcom/sdx55m/edl.mbn",
+	.config = &modem_quectel_v1_mhiv_config,
+	.bar_num = MHI_PCI_DEFAULT_BAR_NUM,
+	.dma_data_width = 32
+};
+
 static const struct pci_device_id mhi_pci_id_table[] = {
+	{ PCI_DEVICE(PCI_VENDOR_ID_QCOM, 0x0306),
+		.driver_data = (kernel_ulong_t) &mhi_quectel_sdx55_info },
 	{ PCI_DEVICE(PCI_VENDOR_ID_QCOM, 0x0306),
 		.driver_data = (kernel_ulong_t) &mhi_qcom_sdx55_info },
 	{  }
