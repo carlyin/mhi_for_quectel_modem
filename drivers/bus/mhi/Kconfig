@@ -41,3 +41,10 @@ config MHI_UCI
 
 	  To compile this driver as a module, choose M here: the module will be
 	  called mhi_uci.
+
+config MHI_NET_MBIM
+	tristate "MHI mbim network driver"
+	depends on MHI_BUS
+	help
+	  This is the network driver for MHI.  It can be used with
+	  QCOM based WWAN modems (like SDX55).  Say Y or M.

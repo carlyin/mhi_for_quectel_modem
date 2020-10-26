@@ -149,8 +149,8 @@ static const struct mhi_channel_config modem_quectel_v1_mhi_channels[] = {
 	MHI_CHANNEL_CONFIG_DL(13, "MBIM", 16, 0),
 	MHI_CHANNEL_CONFIG_UL(32, "DUN", 16, 0),
 	MHI_CHANNEL_CONFIG_DL(33, "DUN", 16, 0),
-	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0", 512, 1),
-	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0", 512, 2),
+	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0_MBIM", 128, 1),
+	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0_MBIM", 128, 2),
 };
 
 static const struct mhi_controller_config modem_quectel_v1_mhiv_config = {
