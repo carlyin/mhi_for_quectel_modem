@@ -33,14 +33,14 @@ struct mhi_pci_dev_info {
 	unsigned int dma_data_width;
 };
 
-#define MHI_CHANNEL_CONFIG_UL(ch_num, ch_name, el_count, ev_ring) \
+#define MHI_CHANNEL_CONFIG_UL(ch_num, ch_name, el_count, ev_ring, ee) \
 	{						\
 		.num = ch_num,				\
 		.name = ch_name,			\
 		.num_elements = el_count,		\
 		.event_ring = ev_ring,			\
 		.dir = DMA_TO_DEVICE,			\
-		.ee_mask = BIT(MHI_EE_AMSS),		\
+		.ee_mask = BIT(ee),		\
 		.pollcfg = 0,				\
 		.doorbell = MHI_DB_BRST_DISABLE,	\
 		.lpm_notify = false,			\
@@ -48,14 +48,14 @@ struct mhi_pci_dev_info {
 		.doorbell_mode_switch = false,		\
 	}						\
 
-#define MHI_CHANNEL_CONFIG_DL(ch_num, ch_name, el_count, ev_ring) \
+#define MHI_CHANNEL_CONFIG_DL(ch_num, ch_name, el_count, ev_ring, ee) \
 	{						\
 		.num = ch_num,				\
 		.name = ch_name,			\
 		.num_elements = el_count,		\
 		.event_ring = ev_ring,			\
 		.dir = DMA_FROM_DEVICE,			\
-		.ee_mask = BIT(MHI_EE_AMSS),		\
+		.ee_mask = BIT(ee),		\
 		.pollcfg = 0,				\
 		.doorbell = MHI_DB_BRST_DISABLE,	\
 		.lpm_notify = false,			\
@@ -104,14 +104,14 @@ struct mhi_pci_dev_info {
 	}
 
 static const struct mhi_channel_config modem_qcom_v1_mhi_channels[] = {
-	MHI_CHANNEL_CONFIG_UL(12, "MBIM", 4, 0),
-	MHI_CHANNEL_CONFIG_DL(13, "MBIM", 4, 0),
-	MHI_CHANNEL_CONFIG_UL(14, "QMI", 4, 0),
-	MHI_CHANNEL_CONFIG_DL(15, "QMI", 4, 0),
-	MHI_CHANNEL_CONFIG_UL(20, "IPCR", 8, 0),
-	MHI_CHANNEL_CONFIG_DL(21, "IPCR", 8, 0),
-	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0", 128, 1),
-	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0", 128, 2),
+	MHI_CHANNEL_CONFIG_UL(12, "MBIM", 4, 0, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_DL(13, "MBIM", 4, 0, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_UL(14, "QMI", 4, 0, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_DL(15, "QMI", 4, 0, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_UL(20, "IPCR", 8, 0, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_DL(21, "IPCR", 8, 0, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0", 128, 1, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0", 128, 2, MHI_EE_AMSS),
 };
 
 static const struct mhi_event_config modem_qcom_v1_mhi_events[] = {
@@ -141,16 +141,20 @@ static const struct mhi_pci_dev_info mhi_qcom_sdx55_info = {
 };
 
 static const struct mhi_channel_config modem_quectel_v1_mhi_channels[] = {
-	MHI_CHANNEL_CONFIG_UL(0, "LOOPBACK", 16, 0),
-	MHI_CHANNEL_CONFIG_DL(1, "LOOPBACK", 16, 0),
-	MHI_CHANNEL_CONFIG_UL(4, "DIAG", 16, 0),
-	MHI_CHANNEL_CONFIG_DL(5, "DIAG", 16, 0),
-	MHI_CHANNEL_CONFIG_UL(12, "MBIM", 16, 0),
-	MHI_CHANNEL_CONFIG_DL(13, "MBIM", 16, 0),
-	MHI_CHANNEL_CONFIG_UL(32, "DUN", 16, 0),
-	MHI_CHANNEL_CONFIG_DL(33, "DUN", 16, 0),
-	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0_MBIM", 128, 1),
-	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0_MBIM", 128, 2),
+	MHI_CHANNEL_CONFIG_UL(0, "LOOPBACK", 16, 0, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_DL(1, "LOOPBACK", 16, 0, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_UL(2, "SAHARA", 16, 0, MHI_EE_SBL),
+	MHI_CHANNEL_CONFIG_DL(3, "SAHARA", 16, 0, MHI_EE_SBL),
+	MHI_CHANNEL_CONFIG_UL(4, "DIAG", 16, 0, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_DL(5, "DIAG", 16, 0, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_UL(12, "MBIM", 16, 0, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_DL(13, "MBIM", 16, 0, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_UL(32, "DUN", 16, 0, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_DL(33, "DUN", 16, 0, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_UL(34, "EDL", 16, 0, MHI_EE_FP),
+	MHI_CHANNEL_CONFIG_DL(35, "EDL", 16, 0, MHI_EE_FP),
+	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0_MBIM", 128, 1, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0_MBIM", 128, 2, MHI_EE_AMSS),
 };
 
 static const struct mhi_controller_config modem_quectel_v1_mhiv_config = {
@@ -162,10 +166,9 @@ static const struct mhi_controller_config modem_quectel_v1_mhiv_config = {
 	.event_cfg = modem_qcom_v1_mhi_events,
 };
 
-static const struct mhi_pci_dev_info mhi_quectel_sdx55_info = {
-	.name = "qcom-sdx55m",
-	.fw = "qcom/sdx55m/sbl1.mbn",
-	.edl = "qcom/sdx55m/edl.mbn",
+static const struct mhi_pci_dev_info mhi_quectel_rm500_info = {
+	.name = "quectel-rm500",
+	.edl = "firehose/prog_firehose_sdx55.mbn",
 	.config = &modem_quectel_v1_mhiv_config,
 	.bar_num = MHI_PCI_DEFAULT_BAR_NUM,
 	.dma_data_width = 32
@@ -173,7 +176,7 @@ static const struct mhi_pci_dev_info mhi_quectel_sdx55_info = {
 
 static const struct pci_device_id mhi_pci_id_table[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_QCOM, 0x0306),
-		.driver_data = (kernel_ulong_t) &mhi_quectel_sdx55_info },
+		.driver_data = (kernel_ulong_t) &mhi_quectel_rm500_info },
 	{ PCI_DEVICE(PCI_VENDOR_ID_QCOM, 0x0306),
 		.driver_data = (kernel_ulong_t) &mhi_qcom_sdx55_info },
 	{  }
