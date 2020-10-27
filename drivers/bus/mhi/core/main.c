@@ -422,7 +422,7 @@ irqreturn_t mhi_intvec_threaded_handler(int irq_number, void *priv)
 		wake_up_all(&mhi_cntrl->state_event);
 
 		/* For fatal errors, we let controller decide next step */
-		if (MHI_IN_PBL(ee))
+		if (MHI_IN_PBL(mhi_cntrl->ee))
 			mhi_cntrl->status_cb(mhi_cntrl, MHI_CB_FATAL_ERROR);
 		else
 			mhi_pm_sys_err_handler(mhi_cntrl);
@@ -781,6 +781,9 @@ int mhi_process_ctrl_ev_ring(struct mhi_controller *mhi_cntrl,
 			switch (event) {
 			case MHI_EE_SBL:
 				st = DEV_ST_TRANSITION_SBL;
+				break;
+			case MHI_EE_FP:
+				st = DEV_ST_TRANSITION_FP;
 				break;
 			case MHI_EE_WFW:
 			case MHI_EE_AMSS:
