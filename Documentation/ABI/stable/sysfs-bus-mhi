@@ -19,3 +19,13 @@ Description:	The file holds the OEM PK Hash value of the endpoint device
 		read without having the device power on at least once, the file
 		will read all 0's.
 Users:		Any userspace application or clients interested in device info.
+
+What:		/sys/bus/mhi/devices/.../ul_chan_id
+Date:		November 2020
+KernelVersion:	5.10
+Contact:	Carl Yin <carl.yin@quectel.com>
+Description:	The file holds the uplink chan id of the mhi chan device.
+		User space software like ModemManager can identify the function of
+		the mhi chan device. If the mhi device is not a chan device,
+		eg mhi controller device, the file read -1.
+Users:		Any userspace application or clients interested in device info.

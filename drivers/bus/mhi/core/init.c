@@ -105,9 +105,24 @@ static ssize_t oem_pk_hash_show(struct device *dev,
 }
 static DEVICE_ATTR_RO(oem_pk_hash);
 
+static ssize_t ul_chan_id_show(struct device *dev,
+				struct device_attribute *attr,
+				char *buf)
+{
+	struct mhi_device *mhi_dev = to_mhi_device(dev);
+	int ul_chan_id = -1;
+
+	if (mhi_dev->ul_chan)
+		ul_chan_id = mhi_dev->ul_chan_id;
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", ul_chan_id);
+}
+static DEVICE_ATTR_RO(ul_chan_id);
+
 static struct attribute *mhi_dev_attrs[] = {
 	&dev_attr_serial_number.attr,
 	&dev_attr_oem_pk_hash.attr,
+	&dev_attr_ul_chan_id.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(mhi_dev);
