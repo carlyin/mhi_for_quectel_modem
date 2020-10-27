@@ -563,7 +563,15 @@ static void mhi_pm_disable_transition(struct mhi_controller *mhi_cntrl,
 	}
 
 	if (cur_state == MHI_PM_SYS_ERR_PROCESS) {
-		mhi_ready_state_transition(mhi_cntrl);
+		if (mhi_get_exec_env(mhi_cntrl) == MHI_EE_EDL
+			&& mhi_get_mhi_state(mhi_cntrl) == MHI_STATE_RESET) {
+			write_lock_irq(&mhi_cntrl->pm_lock);
+			cur_state = mhi_tryset_pm_state(mhi_cntrl, MHI_PM_POR);
+			write_unlock_irq(&mhi_cntrl->pm_lock);
+			mhi_queue_state_transition(mhi_cntrl, DEV_ST_TRANSITION_PBL);
+		} else {
+			mhi_ready_state_transition(mhi_cntrl);
+		}
 	} else {
 		/* Move to disable state */
 		write_lock_irq(&mhi_cntrl->pm_lock);
@@ -657,6 +665,12 @@ void mhi_pm_st_worker(struct work_struct *work)
 			break;
 		case DEV_ST_TRANSITION_MISSION_MODE:
 			mhi_pm_mission_mode_transition(mhi_cntrl);
+			break;
+		case DEV_ST_TRANSITION_FP:
+			write_lock_irq(&mhi_cntrl->pm_lock);
+			mhi_cntrl->ee = MHI_EE_FP;
+			write_unlock_irq(&mhi_cntrl->pm_lock);
+			mhi_create_devices(mhi_cntrl);
 			break;
 		case DEV_ST_TRANSITION_READY:
 			mhi_ready_state_transition(mhi_cntrl);
