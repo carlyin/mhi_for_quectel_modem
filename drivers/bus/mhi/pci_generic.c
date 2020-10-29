@@ -174,7 +174,19 @@ static const struct mhi_pci_dev_info mhi_quectel_rm500_info = {
 	.dma_data_width = 32
 };
 
+static const struct mhi_pci_dev_info mhi_quectel_em120_info = {
+	.name = "quectel-em120",
+	.edl = "firehose/prog_firehose_sdx24.mbn",
+	.config = &modem_quectel_v1_mhiv_config,
+	.bar_num = MHI_PCI_DEFAULT_BAR_NUM,
+	.dma_data_width = 32
+};
+
 static const struct pci_device_id mhi_pci_id_table[] = {
+	{ PCI_DEVICE(0x1eac, 0x1001),
+		.driver_data = (kernel_ulong_t) &mhi_quectel_em120_info },
+	{ PCI_DEVICE(0x1eac, 0x1002),
+		.driver_data = (kernel_ulong_t) &mhi_quectel_em120_info },
 	{ PCI_DEVICE(PCI_VENDOR_ID_QCOM, 0x0306),
 		.driver_data = (kernel_ulong_t) &mhi_quectel_rm500_info },
 	{ PCI_DEVICE(PCI_VENDOR_ID_QCOM, 0x0306),
