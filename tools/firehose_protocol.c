@@ -863,31 +863,41 @@ int main(int argc, char *argv[]) {
 		goto _find_edl;
 
 	snprintf(mhi_chan, sizeof(mhi_chan), "/dev/mhi_%s_%s", mhi_dev, "DIAG");
-	fd = open(mhi_chan, O_RDWR | O_NOCTTY);
+	fd = open(mhi_chan, O_RDWR | O_NOCTTY | O_NONBLOCK);
 	if (fd == -1) {
 		dbg_time("fail to open %s, errno: %d (%s)\n", mhi_chan, errno, strerror(errno));
 		error_return();
 	}
 	dbg_time("open('%s') = %d\n", mhi_chan, fd);
 
-	dbg_time("send edl cmd\n");
-	ret = write(fd, edl_cmd, sizeof(edl_cmd));
-	if (ret != sizeof(edl_cmd)) {
-		dbg_time("fail to write ret=%d, errno: %d (%s)\n", ret, errno, strerror(errno));
-		close(fd);
-		error_return();
-	}
+	while (1) {
+		struct pollfd pollfds[] = {{fd, POLLIN, 0}};
 
-	while (ret > 0) {
-		ret = read(fd, rx_buf, sizeof(rx_buf));
-		dbg_time("read = %d\n", ret);
+		ret = poll(pollfds, 1, 3000);
+		if (ret < 0) {
+			dbg_time("fail to poll ret=%d, errno: %d (%s)\n", ret, errno, strerror(errno));
+			break;
+		}
+		else if (ret == 0) {
+			dbg_time("send edl cmd\n");
+			write(fd, edl_cmd, sizeof(edl_cmd));
+		}
+		else if (pollfds[0].revents & POLLIN) {
+			ret = read(fd, rx_buf, sizeof(rx_buf));
+			printf("read = %d\n", ret);
+			if (ret <= 0)
+				break;
+		}
+		else {
+			break;
+		}
 	}
 
 	close(fd);
 
 	snprintf(mhi_chan, sizeof(mhi_chan), "/dev/mhi_%s_%s", mhi_dev, "EDL");
 	dbg_time("wait %s\n", mhi_chan);
-	for (ret = 0; ret < 10; ret++) {
+	for (ret = 0; ret < 3; ret++) {
 		if (!access(mhi_chan, F_OK))
 			break;
 		sleep(1);
