@@ -208,10 +208,40 @@ static void mhi_pci_write_reg(struct mhi_controller *mhi_cntrl,
 	writel(val, addr);
 }
 
+static struct mhi_controller *s_mhi_cntrl = NULL;
+static void mhi_pci_status_cb_work_func(struct work_struct *bullshit)
+{
+	struct mhi_controller *mhi_cntrl = s_mhi_cntrl;
+	int err;
+
+	mhi_power_down(mhi_cntrl, true);
+	mhi_unprepare_after_power_down(mhi_cntrl);
+	err = mhi_prepare_for_power_up(mhi_cntrl);
+	if (err) {
+		dev_err(mhi_cntrl->cntrl_dev, "failed to prepare MHI controller\n");
+	}
+	else {
+		err = mhi_sync_power_up(mhi_cntrl);
+		if (err) {
+			dev_err(mhi_cntrl->cntrl_dev, "failed to power up MHI controller\n");
+		}
+	}
+}
+
+static DECLARE_WORK(status_cb_work, mhi_pci_status_cb_work_func);
+
+
 static void mhi_pci_status_cb(struct mhi_controller *mhi_cntrl,
 			      enum mhi_callback cb)
 {
-	/* Nothing to do for now */
+	dev_info(mhi_cntrl->cntrl_dev, "%s ee=%d, cb=%d\n", __func__, mhi_cntrl->ee, cb);
+
+	if (cb != MHI_CB_FATAL_ERROR)
+		return;
+
+	s_mhi_cntrl = mhi_cntrl;
+	schedule_work(&status_cb_work);
+	return;
 }
 
 static int mhi_pci_claim(struct mhi_controller *mhi_cntrl,
