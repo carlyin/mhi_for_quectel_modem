@@ -563,15 +563,7 @@ static void mhi_pm_disable_transition(struct mhi_controller *mhi_cntrl,
 	}
 
 	if (cur_state == MHI_PM_SYS_ERR_PROCESS) {
-		if (mhi_get_exec_env(mhi_cntrl) == MHI_EE_EDL
-			&& mhi_get_mhi_state(mhi_cntrl) == MHI_STATE_RESET) {
-			write_lock_irq(&mhi_cntrl->pm_lock);
-			cur_state = mhi_tryset_pm_state(mhi_cntrl, MHI_PM_POR);
-			write_unlock_irq(&mhi_cntrl->pm_lock);
-			mhi_queue_state_transition(mhi_cntrl, DEV_ST_TRANSITION_PBL);
-		} else {
-			mhi_ready_state_transition(mhi_cntrl);
-		}
+		mhi_ready_state_transition(mhi_cntrl);
 	} else {
 		/* Move to disable state */
 		write_lock_irq(&mhi_cntrl->pm_lock);
@@ -986,6 +978,7 @@ int mhi_async_power_up(struct mhi_controller *mhi_cntrl)
 	current_ee = mhi_get_exec_env(mhi_cntrl);
 	write_unlock_irq(&mhi_cntrl->pm_lock);
 
+	dev_info(dev, "current_ee=%d, next_stae=%d\n", current_ee, next_state);
 	/* Confirm that the device is in valid exec env */
 	if (!MHI_IN_PBL(current_ee) && current_ee != MHI_EE_AMSS) {
 		dev_err(dev, "Not a valid EE for power on\n");
@@ -1022,6 +1015,8 @@ int mhi_async_power_up(struct mhi_controller *mhi_cntrl)
 	/* Transition to next state */
 	next_state = MHI_IN_PBL(current_ee) ?
 		DEV_ST_TRANSITION_PBL : DEV_ST_TRANSITION_READY;
+
+	dev_info(dev, "current_ee=%d, next_stae=%d\n", current_ee, next_state);
 
 	mhi_queue_state_transition(mhi_cntrl, next_state);
 
@@ -1089,12 +1084,20 @@ int mhi_sync_power_up(struct mhi_controller *mhi_cntrl)
 	if (ret)
 		return ret;
 
+printk("%s start wait\n", __func__);
 	wait_event_timeout(mhi_cntrl->state_event,
 			   MHI_IN_MISSION_MODE(mhi_cntrl->ee) ||
+			   mhi_cntrl->ee == MHI_EE_FP ||
 			   MHI_PM_IN_ERROR_STATE(mhi_cntrl->pm_state),
 			   msecs_to_jiffies(mhi_cntrl->timeout_ms));
+printk("%s end wait ee=%d\n\n", __func__, mhi_cntrl->ee);
 
-	ret = (MHI_IN_MISSION_MODE(mhi_cntrl->ee)) ? 0 : -ETIMEDOUT;
+	if (mhi_cntrl->ee == MHI_EE_FP) {
+		mhi_queue_state_transition(mhi_cntrl, DEV_ST_TRANSITION_READY);
+	} else {
+		ret = (MHI_IN_MISSION_MODE(mhi_cntrl->ee)) ? 0 : -ETIMEDOUT;
+	}
+
 	if (ret)
 		mhi_power_down(mhi_cntrl, false);
 

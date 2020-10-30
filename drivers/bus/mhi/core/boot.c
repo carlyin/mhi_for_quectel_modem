@@ -460,10 +460,8 @@ void mhi_fw_load_handler(struct mhi_controller *mhi_cntrl)
 		return;
 	}
 
-	if (mhi_cntrl->ee == MHI_EE_EDL) {
-		mhi_ready_state_transition(mhi_cntrl);
+	if (mhi_cntrl->ee == MHI_EE_EDL)
 		return;
-	}
 
 	write_lock_irq(&mhi_cntrl->pm_lock);
 	mhi_cntrl->dev_state = MHI_STATE_RESET;
