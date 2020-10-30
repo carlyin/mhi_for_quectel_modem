@@ -897,7 +897,7 @@ int main(int argc, char *argv[]) {
 
 	snprintf(mhi_chan, sizeof(mhi_chan), "/dev/mhi_%s_%s", mhi_dev, "EDL");
 	dbg_time("wait %s\n", mhi_chan);
-	for (ret = 0; ret < 3; ret++) {
+	for (ret = 0; ret < 6; ret++) {
 		if (!access(mhi_chan, F_OK))
 			break;
 		sleep(1);
