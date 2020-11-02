@@ -65,8 +65,8 @@ struct mhi_pci_dev_info {
 
 #define MHI_EVENT_CONFIG_CTRL(ev_ring)		\
 	{					\
-		.num_elements = 64,		\
-		.irq_moderation_ms = 0,		\
+		.num_elements = 256,		\
+		.irq_moderation_ms = 1,		\
 		.irq = (ev_ring) + 1,		\
 		.priority = 1,			\
 		.mode = MHI_DB_BRST_DISABLE,	\
