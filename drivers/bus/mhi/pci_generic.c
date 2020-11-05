@@ -103,6 +103,34 @@ struct mhi_pci_dev_info {
 		.channel = ch_num,		\
 	}
 
+#define MHI_EVENT_CONFIG_HW_OUT(ev_ring, ch_num) \
+	{					\
+		.num_elements = 512,		\
+		.irq_moderation_ms = 1,		\
+		.irq = (ev_ring) + 1,		\
+		.priority = 1,			\
+		.mode = MHI_DB_BRST_ENABLE,	\
+		.data_type = MHI_ER_DATA,	\
+		.hardware_event = true,		\
+		.client_managed = false,	\
+		.offload_channel = false,	\
+		.channel = ch_num,		\
+	}
+
+#define MHI_EVENT_CONFIG_HW_IN(ev_ring, ch_num) \
+	{					\
+		.num_elements = 512,		\
+		.irq_moderation_ms = 5,		\
+		.irq = (ev_ring) + 1,		\
+		.priority = 1,			\
+		.mode = MHI_DB_BRST_ENABLE,	\
+		.data_type = MHI_ER_DATA,	\
+		.hardware_event = true,		\
+		.client_managed = true,	\
+		.offload_channel = false,	\
+		.channel = ch_num,		\
+	}
+
 static const struct mhi_channel_config modem_qcom_v1_mhi_channels[] = {
 	MHI_CHANNEL_CONFIG_UL(12, "MBIM", 4, 0, MHI_EE_AMSS),
 	MHI_CHANNEL_CONFIG_DL(13, "MBIM", 4, 0, MHI_EE_AMSS),
@@ -110,16 +138,16 @@ static const struct mhi_channel_config modem_qcom_v1_mhi_channels[] = {
 	MHI_CHANNEL_CONFIG_DL(15, "QMI", 4, 0, MHI_EE_AMSS),
 	MHI_CHANNEL_CONFIG_UL(20, "IPCR", 8, 0, MHI_EE_AMSS),
 	MHI_CHANNEL_CONFIG_DL(21, "IPCR", 8, 0, MHI_EE_AMSS),
-	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0", 128, 1, MHI_EE_AMSS),
-	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0", 128, 2, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0", 256, 1, MHI_EE_AMSS),
+	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0", 256, 2, MHI_EE_AMSS),
 };
 
 static const struct mhi_event_config modem_qcom_v1_mhi_events[] = {
 	/* first ring is control+data ring */
 	MHI_EVENT_CONFIG_CTRL(0),
 	/* Hardware channels request dedicated hardware event rings */
-	MHI_EVENT_CONFIG_HW_DATA(1, 100),
-	MHI_EVENT_CONFIG_HW_DATA(2, 101)
+	MHI_EVENT_CONFIG_HW_OUT(1, 100),
+	MHI_EVENT_CONFIG_HW_IN(2, 101)
 };
 
 static const struct mhi_controller_config modem_qcom_v1_mhiv_config = {
