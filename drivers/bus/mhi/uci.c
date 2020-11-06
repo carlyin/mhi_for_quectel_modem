@@ -125,7 +125,6 @@ static int mhi_queue_inbound(struct uci_dev *udev)
 	struct mhi_device *mhi_dev = udev->mhi_dev;
 	struct device *dev = &mhi_dev->dev;
 	int nr_trbs, i, ret = -EIO;
-	size_t dl_buf_size;
 	void *buf;
 	struct uci_buf *ubuf;
 
@@ -136,20 +135,18 @@ static int mhi_queue_inbound(struct uci_dev *udev)
 	nr_trbs = mhi_get_free_desc_count(mhi_dev, DMA_FROM_DEVICE);
 
 	for (i = 0; i < nr_trbs; i++) {
-		buf = kmalloc(udev->mtu, GFP_KERNEL);
+		buf = kmalloc(udev->mtu + sizeof(*ubuf), GFP_KERNEL);
 		if (!buf)
 			return -ENOMEM;
 
-		dl_buf_size = udev->mtu - sizeof(*ubuf);
-
 		/* save uci_buf info at the end of buf */
-		ubuf = buf + dl_buf_size;
+		ubuf = buf + udev->mtu;
 		ubuf->data = buf;
 
 		dev_dbg(dev, "Allocated buf %d of %d size %zu\n", i, nr_trbs,
-			dl_buf_size);
+			udev->mtu);
 
-		ret = mhi_queue_buf(mhi_dev, DMA_FROM_DEVICE, buf, dl_buf_size,
+		ret = mhi_queue_buf(mhi_dev, DMA_FROM_DEVICE, buf, udev->mtu,
 				    MHI_EOT);
 		if (ret) {
 			kfree(buf);
@@ -316,6 +313,10 @@ static ssize_t mhi_uci_write(struct file *file,
 		void *kbuf;
 		enum mhi_flags flags;
 
+		nr_avail = mhi_get_free_desc_count(mhi_dev,DMA_TO_DEVICE);
+		if (!nr_avail && (file->f_flags & O_NONBLOCK))
+			return -EAGAIN;
+
 		/* wait for free descriptors */
 		ret = wait_event_interruptible(uchan->ul_wq,
 					       (!udev->enabled) ||
@@ -402,6 +403,10 @@ static ssize_t mhi_uci_read(struct file *file,
 		dev_dbg(dev, "No data available to read, waiting\n");
 
 		spin_unlock_bh(&uchan->dl_pending_lock);
+
+		if (file->f_flags & O_NONBLOCK)
+			return -EAGAIN;
+
 		ret = wait_event_interruptible(uchan->dl_wq,
 					       (!udev->enabled ||
 					      !list_empty(&uchan->dl_pending)));
@@ -508,7 +513,6 @@ static void mhi_dl_xfer_cb(struct mhi_device *mhi_dev,
 	struct uci_chan *uchan = udev->uchan;
 	struct device *dev = &mhi_dev->dev;
 	struct uci_buf *ubuf;
-	size_t dl_buf_size = udev->mtu - sizeof(*ubuf);
 
 	dev_dbg(dev, "status: %d receive_len: %zu\n",
 		mhi_result->transaction_status, mhi_result->bytes_xferd);
@@ -519,7 +523,7 @@ static void mhi_dl_xfer_cb(struct mhi_device *mhi_dev,
 		return;
 	}
 
-	ubuf = mhi_result->buf_addr + dl_buf_size;
+	ubuf = mhi_result->buf_addr + udev->mtu;
 	ubuf->data = mhi_result->buf_addr;
 	ubuf->len = mhi_result->bytes_xferd;
 	spin_lock_bh(&uchan->dl_pending_lock);
