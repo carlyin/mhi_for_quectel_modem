@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# MHI Network devices configuration
+#
+
+menuconfig MHI_NET_DRIVERS
+	tristate "MHI Network Adapters"
+	depends on MHI_BUS
+
+config MHI_NET
+	tristate "MHI Network Framework"
+	depends on MHI_BUS
+	help
+	  MHI Network Framework
+
+	  what other networking devices you have in use.
+
+config USB_NET_CDC_MBIM
+	tristate "CDC MBIM support"
+	depends on MHI_NET
+	select MHI_UCI
+	help
+	  This driver provides support for CDC MBIM (Mobile Broadband
+	  Interface Model) devices. The CDC MBIM specification is
+	  available from <http://www.usb.org/>.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called cdc_mbim.
+
+config USB_NET_QMI_WWAN
+	tristate "QMI WWAN driver for Qualcomm MSM based modems"
+	depends on MHI_NET
+	select MHI_UCI
+	help
+	  Support WWAN LTE/5G devices based on Qualcomm Mobile Data Modem
+	  (MDM) chipsets.  Examples of such devices are
+		* Quectel EM120/RM500
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called qmi_wwan.
+
+endif # MHI_NET_DRIVERS
