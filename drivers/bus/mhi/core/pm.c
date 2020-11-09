@@ -980,7 +980,7 @@ int mhi_async_power_up(struct mhi_controller *mhi_cntrl)
 
 	dev_info(dev, "current_ee=%d, next_stae=%d\n", current_ee, next_state);
 	/* Confirm that the device is in valid exec env */
-	if (!MHI_IN_PBL(current_ee) && current_ee != MHI_EE_AMSS) {
+	if (!MHI_IN_PBL(current_ee) && current_ee != MHI_EE_AMSS && current_ee != MHI_EE_SBL) {
 		dev_err(dev, "Not a valid EE for power on\n");
 		ret = -EIO;
 		goto error_bhi_offset;
@@ -1094,6 +1094,8 @@ printk("%s end wait ee=%d\n\n", __func__, mhi_cntrl->ee);
 
 	if (mhi_cntrl->ee == MHI_EE_FP) {
 		mhi_queue_state_transition(mhi_cntrl, DEV_ST_TRANSITION_READY);
+	} else if (mhi_cntrl->ee == MHI_EE_SBL) {
+		ret = 0;
 	} else {
 		ret = (MHI_IN_MISSION_MODE(mhi_cntrl->ee)) ? 0 : -ETIMEDOUT;
 	}
