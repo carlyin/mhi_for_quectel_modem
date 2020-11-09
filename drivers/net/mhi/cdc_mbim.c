@@ -4,6 +4,7 @@
 #include <linux/module.h>
 #include <linux/mod_devicetable.h>
 #include <linux/netdevice.h>
+#include <linux/if_vlan.h>
 #include <linux/skbuff.h>
 #include <linux/usb/cdc.h>
 #include <linux/mhi.h>
@@ -37,30 +38,46 @@ static void cdc_mbim_unbind(struct mhi_net *dev)
 {
 }
 
+/* verify that the ethernet protocol is IPv4 or IPv6 */
+static bool is_ip_proto(__be16 proto)
+{
+	switch (proto) {
+	case htons(ETH_P_IP):
+	case htons(ETH_P_IPV6):
+		return true;
+	}
+	return false;
+}
+
 static struct sk_buff * cdc_mbim_tx_fixup(struct mhi_net *dev,
 				struct sk_buff *skb, gfp_t flags)
 {
-	struct net_device *net_dev = dev->net_dev;
 	struct cdc_mbim_ctx *ctx = (void *)&dev->data;
 	struct cdc_mbim_hdr *mhdr;
 	__le32 sign;
 	u8 *c;
 	u16 tci = 0;
+	bool is_ip;
 	unsigned int skb_len;
+
+	if (skb->len <= ETH_HLEN)
+		goto error;
 
 	skb_reset_mac_header(skb);
 
-	if (skb_pull(skb, ETH_HLEN) == NULL) {
-		dev_kfree_skb_any (skb);
-		return NULL;
+	if (skb->len > VLAN_ETH_HLEN && __vlan_get_tag(skb, &tci) == 0) {
+		is_ip = is_ip_proto(vlan_eth_hdr(skb)->h_vlan_encapsulated_proto);
+		skb_pull(skb, VLAN_ETH_HLEN);
+	} else {
+		is_ip = is_ip_proto(eth_hdr(skb)->h_proto);
+		skb_pull(skb, ETH_HLEN);
 	}
 
-	if (skb_headroom(skb) < sizeof(struct cdc_mbim_hdr)) {
-		net_err_ratelimited("%s: skb_headroom small! headroom is %u, need %zd\n",
-			net_dev->name, skb_headroom(skb), sizeof(struct cdc_mbim_hdr));
-		dev_kfree_skb_any (skb);
-		return NULL;
-	}
+	if (!is_ip)
+		goto error;
+
+	if (skb_headroom(skb) < sizeof(struct cdc_mbim_hdr))
+		goto error;
 
 	skb_len = skb->len;
 	skb_push(skb, sizeof(struct cdc_mbim_hdr));
@@ -72,7 +89,13 @@ static struct sk_buff * cdc_mbim_tx_fixup(struct mhi_net *dev,
 	mhdr->nth16.wBlockLength = cpu_to_le16(skb->len);
 	mhdr->nth16.wNdpIndex = cpu_to_le16(sizeof(struct usb_cdc_ncm_nth16));
 
-	sign = cpu_to_le32(USB_CDC_MBIM_NDP16_IPS_SIGN);
+	if (tci < 256)
+		sign = cpu_to_le32(USB_CDC_MBIM_NDP16_IPS_SIGN);
+	else if (tci < 512)
+		sign = cpu_to_le32(USB_CDC_MBIM_NDP16_DSS_SIGN);
+	else
+		goto error;
+
 	c = (u8 *)&sign;
 	c[3] = tci;
 
@@ -87,6 +110,10 @@ static struct sk_buff * cdc_mbim_tx_fixup(struct mhi_net *dev,
 	mhdr->ndp16.dpe16[1].wDatagramLength = 0;
 
 	return skb;
+
+error:
+	dev_kfree_skb_any (skb);
+	return NULL;
 }
 
 static int cdc_mbim_rx_fixup(struct mhi_net *dev, struct sk_buff *skb_in)
@@ -163,9 +190,6 @@ static int cdc_mbim_rx_fixup(struct mhi_net *dev, struct sk_buff *skb_in)
 			case cpu_to_le32(USB_CDC_MBIM_NDP16_IPS_SIGN):
 				c = (u8 *)&ndp16->dwSignature;
 				tci = c[3];
-				/* tag IPS<0> packets too if MBIM_IPS0_VID exists */
-				//if (!tci && info->flags & FLAG_IPS0_VLAN)
-				//	tci = MBIM_IPS0_VID;
 			break;
 			case cpu_to_le32(USB_CDC_MBIM_NDP16_DSS_SIGN):
 				c = (u8 *)&ndp16->dwSignature;
@@ -174,12 +198,6 @@ static int cdc_mbim_rx_fixup(struct mhi_net *dev, struct sk_buff *skb_in)
 			default:
 				net_err_ratelimited("%s: unsupported NDP signature <0x%08x>\n",
 					net_dev->name, le32_to_cpu(ndp16->dwSignature));
-			goto error;
-		}
-
-		if (tci != 0) {
-			net_err_ratelimited("%s: unsupported tci %d by now\n",
-				net_dev->name, tci);
 			goto error;
 		}
 
@@ -200,7 +218,7 @@ static int cdc_mbim_rx_fixup(struct mhi_net *dev, struct sk_buff *skb_in)
 				goto error;
 			}
 
-			new_skb = netdev_alloc_skb(net_dev,  skb_len);
+			new_skb = netdev_alloc_skb(net_dev, skb_len + ETH_HLEN);
 			if (!new_skb) {
 				goto error;
 			}
@@ -217,15 +235,21 @@ static int cdc_mbim_rx_fixup(struct mhi_net *dev, struct sk_buff *skb_in)
 						net_dev->name, skb_in->data[offset]);
 					goto error;
 			}
-			
-			skb_put(new_skb, skb_len);
-			memcpy(new_skb->data, skb_in->data + offset, skb_len);
 
-			skb_reset_transport_header(new_skb);
-			skb_reset_network_header(new_skb);
-			new_skb->pkt_type = PACKET_HOST;
-			skb_set_mac_header(new_skb, 0);
- 
+			/* add an ethernet header */
+			skb_put(new_skb, ETH_HLEN);
+			skb_reset_mac_header(new_skb);
+			eth_hdr(new_skb)->h_proto = new_skb->protocol;
+			eth_zero_addr(eth_hdr(new_skb)->h_source);
+			memcpy(eth_hdr(new_skb)->h_dest, net_dev->dev_addr, ETH_ALEN);
+
+			/* add datagram */
+			skb_put_data(new_skb, skb_in->data + offset, skb_len);
+
+			/* map MBIM session to VLAN */
+			if (tci)
+				__vlan_hwaccel_put_tag(new_skb, htons(ETH_P_8021Q), tci);
+
 			__skb_queue_tail(&skb_chain, new_skb);
 		}
 
@@ -235,9 +259,11 @@ static int cdc_mbim_rx_fixup(struct mhi_net *dev, struct sk_buff *skb_in)
 
 error:
 	while ((new_skb = __skb_dequeue (&skb_chain))) {
+		__skb_pull(new_skb, ETH_HLEN);
 		netif_receive_skb(new_skb);
 	}
 
+	dev_kfree_skb_any(skb_in);
 	return 0;
 }
 

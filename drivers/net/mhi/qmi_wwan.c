@@ -199,6 +199,7 @@ error_pkt:
 		netif_receive_skb(new_skb);
 	}
 
+	kfree_skb(skb_in);
 	return 0;
 }
 

@@ -26,7 +26,6 @@ struct mhi_net {
 	struct napi_struct napi;
 	const struct driver_info *driver_info;
 	struct pcpu_sw_netstats __percpu *stats64;
-	struct sk_buff_head rx_allocated;
 	struct sk_buff_head rx_pending;
 	struct delayed_work rx_refill;
 

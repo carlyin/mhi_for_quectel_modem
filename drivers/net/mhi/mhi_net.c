@@ -18,11 +18,7 @@ static void rx_alloc_submit(struct mhi_net *dev)
 	no_tre = mhi_get_free_desc_count(dev->mhi_dev, DMA_FROM_DEVICE);
 
 	for (i = 0; i < no_tre; i++) {
-		skb = skb_dequeue(&dev->rx_allocated);
-
-		if (unlikely(!skb))
-			skb = netdev_alloc_skb(dev->net_dev, dev->mru);
-
+		skb = netdev_alloc_skb(dev->net_dev, dev->mru);
 		if (unlikely(!skb)) {
 			net_err_ratelimited("%s: Failed to alloc RX skb\n",
 					    dev->net_dev->name);
@@ -107,9 +103,6 @@ int mhi_net_stop (struct net_device *net)
 	cancel_delayed_work_sync(&dev->rx_refill);
 	mhi_unprepare_from_transfer(mhi_dev);
 
-	while ((skb = skb_dequeue (&dev->rx_allocated)))
-		dev_kfree_skb_any(skb);
-
 	while ((skb = skb_dequeue (&dev->rx_pending)))
 		dev_kfree_skb_any(skb);
 
@@ -175,10 +168,6 @@ static int mhi_net_poll(struct napi_struct *napi, int budget)
 	while ((skb = skb_dequeue (&dev->rx_pending))) {
 		if (info->rx_fixup)
 			info->rx_fixup(dev, skb);
-		skb->data = skb->head;
-		skb_reset_tail_pointer(skb);
-		skb->len = 0;
-		skb_queue_tail(&dev->rx_allocated, skb);
 	}
 
 	rx_alloc_submit(dev);
@@ -214,15 +203,15 @@ static const struct net_device_ops mhi_net_ops = {
 
 static void mhi_net_setup(struct net_device *net_dev)
 {
+	const unsigned char node_id[ETH_ALEN] = {0x02, 0x50, 0xf4, 0x00, 0x00, 0x00};
+
 	ether_setup(net_dev);
 
+	net_dev->needed_headroom = 16;
 	net_dev->flags           |=  IFF_NOARP;
 	net_dev->flags           &= ~(IFF_BROADCAST | IFF_MULTICAST);
-	net_dev->features      |= (NETIF_F_VLAN_CHALLENGED); /* Do not support VALN by now */
-
-	net_dev->needed_headroom = 32;
-
 	net_dev->netdev_ops = &mhi_net_ops;
+	memcpy (net_dev->dev_addr, node_id, sizeof node_id);
 }
 
 int mhi_net_probe(struct mhi_device *mhi_dev, const struct mhi_device_id *id)
@@ -254,7 +243,6 @@ int mhi_net_probe(struct mhi_device *mhi_dev, const struct mhi_device_id *id)
 	dev->mru = 1500;
 
 	skb_queue_head_init(&dev->rx_pending);
-	skb_queue_head_init(&dev->rx_allocated);
 	INIT_DELAYED_WORK(&dev->rx_refill, mhi_net_rx_refill_work);
 
 	dev->stats64 = netdev_alloc_pcpu_stats(struct pcpu_sw_netstats);
