@@ -42,7 +42,7 @@ struct mhi_pci_dev_info {
 		.dir = DMA_TO_DEVICE,			\
 		.ee_mask = BIT(ee),		\
 		.pollcfg = 0,				\
-		.doorbell = MHI_DB_BRST_DISABLE,	\
+		.doorbell = db,	\
 		.lpm_notify = false,			\
 		.offload_channel = false,		\
 		.doorbell_mode_switch = false,		\
@@ -57,7 +57,7 @@ struct mhi_pci_dev_info {
 		.dir = DMA_FROM_DEVICE,			\
 		.ee_mask = BIT(ee),		\
 		.pollcfg = 0,				\
-		.doorbell = MHI_DB_BRST_DISABLE,	\
+		.doorbell = db,	\
 		.lpm_notify = false,			\
 		.offload_channel = false,		\
 		.doorbell_mode_switch = false,		\
@@ -211,6 +211,8 @@ static const struct mhi_pci_dev_info mhi_quectel_em120_info = {
 };
 
 static const struct pci_device_id mhi_pci_id_table[] = {
+	{ PCI_DEVICE(0x17cb, 0x0304),
+		.driver_data = (kernel_ulong_t) &mhi_quectel_em120_info },
 	{ PCI_DEVICE(0x1eac, 0x1001),
 		.driver_data = (kernel_ulong_t) &mhi_quectel_em120_info },
 	{ PCI_DEVICE(0x1eac, 0x1002),
@@ -249,7 +251,7 @@ static void mhi_pci_status_cb_work_func(struct work_struct *bullshit)
 		dev_err(mhi_cntrl->cntrl_dev, "failed to prepare MHI controller\n");
 	}
 	else {
-		err = mhi_sync_power_up(mhi_cntrl);
+		err = mhi_async_power_up(mhi_cntrl);
 		if (err) {
 			dev_err(mhi_cntrl->cntrl_dev, "failed to power up MHI controller\n");
 		}
