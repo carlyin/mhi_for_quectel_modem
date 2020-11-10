@@ -78,7 +78,7 @@ struct mhi_pci_dev_info {
 
 #define MHI_EVENT_CONFIG_DATA(ev_ring)		\
 	{					\
-		.num_elements = 128,		\
+		.num_elements = 256,		\
 		.irq_moderation_ms = 5,		\
 		.irq = (ev_ring) + 1,		\
 		.priority = 1,			\
@@ -89,23 +89,9 @@ struct mhi_pci_dev_info {
 		.offload_channel = false,	\
 	}
 
-#define MHI_EVENT_CONFIG_HW_DATA(ev_ring, ch_num) \
-	{					\
-		.num_elements = 128,		\
-		.irq_moderation_ms = 5,		\
-		.irq = (ev_ring) + 1,		\
-		.priority = 1,			\
-		.mode = MHI_DB_BRST_DISABLE,	\
-		.data_type = MHI_ER_DATA,	\
-		.hardware_event = true,		\
-		.client_managed = false,	\
-		.offload_channel = false,	\
-		.channel = ch_num,		\
-	}
-
 #define MHI_EVENT_CONFIG_HW_OUT(ev_ring, ch_num) \
 	{					\
-		.num_elements = 512,		\
+		.num_elements = 1024,		\
 		.irq_moderation_ms = 1,		\
 		.irq = (ev_ring) + 1,		\
 		.priority = 1,			\
@@ -119,7 +105,7 @@ struct mhi_pci_dev_info {
 
 #define MHI_EVENT_CONFIG_HW_IN(ev_ring, ch_num) \
 	{					\
-		.num_elements = 512,		\
+		.num_elements = 1024,		\
 		.irq_moderation_ms = 5,		\
 		.irq = (ev_ring) + 1,		\
 		.priority = 1,			\
@@ -181,8 +167,8 @@ static const struct mhi_channel_config modem_quectel_v1_mhi_channels[] = {
 	MHI_CHANNEL_CONFIG_DL(33, "DUN", 16, 0, MHI_EE_AMSS, MHI_DB_BRST_DISABLE),
 	MHI_CHANNEL_CONFIG_UL(34, "EDL", 16, 0, MHI_EE_FP, MHI_DB_BRST_DISABLE),
 	MHI_CHANNEL_CONFIG_DL(35, "EDL", 16, 0, MHI_EE_FP, MHI_DB_BRST_DISABLE),
-	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0_MBIM", 256, 1, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
-	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0_MBIM", 256, 2, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
+	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0_MBIM", 512, 1, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
+	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0_MBIM", 512, 2, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
 };
 
 static const struct mhi_controller_config modem_quectel_v1_mhiv_config = {
@@ -212,6 +198,8 @@ static const struct mhi_pci_dev_info mhi_quectel_em120_info = {
 
 static const struct pci_device_id mhi_pci_id_table[] = {
 	{ PCI_DEVICE(0x17cb, 0x0304),
+		.driver_data = (kernel_ulong_t) &mhi_quectel_em120_info },
+	{ PCI_DEVICE(0x17cb, 0x0306),
 		.driver_data = (kernel_ulong_t) &mhi_quectel_em120_info },
 	{ PCI_DEVICE(0x1eac, 0x1001),
 		.driver_data = (kernel_ulong_t) &mhi_quectel_em120_info },
@@ -267,6 +255,10 @@ static void mhi_pci_status_cb(struct mhi_controller *mhi_cntrl,
 	dev_info(mhi_cntrl->cntrl_dev, "%s ee=%d, cb=%d\n", __func__, mhi_cntrl->ee, cb);
 
 	if (cb != MHI_CB_FATAL_ERROR)
+		return;
+
+	/* ignore AMSS -> SBL -> PASS THRU -> AMSS */
+	if (mhi_cntrl->ee == MHI_EE_PTHRU)
 		return;
 
 	s_mhi_cntrl = mhi_cntrl;
@@ -412,7 +404,7 @@ static int mhi_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		goto err_unregister;
 	}
 
-	err = mhi_sync_power_up(mhi_cntrl);
+	err = mhi_async_power_up(mhi_cntrl);
 	if (err) {
 		dev_err(&pdev->dev, "failed to power up MHI controller\n");
 		goto err_unprepare;
