@@ -36,8 +36,12 @@ static void rx_alloc_submit(struct mhi_net *dev)
 		}
 	}
 
-	if (i < no_tre)
+	if (no_tre > 64)
+		printk("%s %d/%d\n", "q ", i, no_tre);
+	if (i < no_tre) {
+		printk("%s %d/%d\n", "q ", i, no_tre);
 		schedule_delayed_work(&dev->rx_refill, 1);
+	}
 }
 
 static void mhi_net_rx_refill_work(struct work_struct *work)
@@ -77,14 +81,17 @@ static void dev_fetch_sw_netstats(struct rtnl_link_stats64 *s,
 int mhi_net_open (struct net_device *net)
 {
 	struct mhi_net *dev = netdev_priv(net);
+#if 0 
 	int			ret;
 
 	/* Start MHI channels */
 	ret = mhi_prepare_for_transfer(dev->mhi_dev);
 	if (ret)
 		return ret;
+	
+	rx_alloc_submit(dev);
+#endif
 
-	schedule_delayed_work(&dev->rx_refill, 0);
 	netif_carrier_on(net);
 	netif_start_queue (net);
 	napi_enable(&dev->napi);
@@ -157,8 +164,14 @@ static int mhi_net_poll(struct napi_struct *napi, int budget)
 	const struct driver_info *info = dev->driver_info;
 	struct sk_buff		*skb;
 	int rx_work = 0;
+	static int max_rx_work = 0;
 
 	rx_work = mhi_poll(mhi_dev, budget);
+	if (rx_work > max_rx_work) {
+		printk("rx_work=%d\n", rx_work);
+		max_rx_work = rx_work;
+	}
+
 	
 	if (rx_work < 0) {
 		napi_complete(napi);
@@ -265,6 +278,12 @@ int mhi_net_probe(struct mhi_device *mhi_dev, const struct mhi_device_id *id)
 
 	netif_device_attach (net);
 
+#if 1 
+	/* Start MHI channels */
+	mhi_prepare_for_transfer(dev->mhi_dev);
+	rx_alloc_submit(dev);
+#endif
+
 	return 0;
 
 _free_stats64:
@@ -304,6 +323,11 @@ void mhi_net_dl_callback(struct mhi_device *mhi_dev,
 	} else {
 		struct pcpu_sw_netstats *stats64 = this_cpu_ptr(dev->stats64);
 		unsigned long flags;
+		static u32 bytes_xferd = 0;
+		if (mhi_res->bytes_xferd > bytes_xferd) {
+			bytes_xferd = mhi_res->bytes_xferd;
+			printk("%s bytes_xferd=%u\n", __func__, bytes_xferd);
+		}
 
 		flags = u64_stats_update_begin_irqsave(&stats64->syncp);
 		stats64->rx_packets++;

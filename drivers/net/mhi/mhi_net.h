@@ -29,6 +29,7 @@ struct mhi_net {
 	struct sk_buff_head rx_pending;
 	struct delayed_work rx_refill;
 
+	bool enabled;
 	size_t			mru;
 	unsigned long		data[5];
 };

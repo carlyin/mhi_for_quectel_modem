@@ -4,12 +4,14 @@
 #include <linux/module.h>
 #include <linux/mod_devicetable.h>
 #include <linux/netdevice.h>
+#include <linux/if_vlan.h>
 #include <linux/skbuff.h>
 #include <linux/mhi.h>
 #include "mhi_net.h"
 
+#define QMAP_DEFAULT_MUX_ID 0x81
+
 struct qmi_wwan_ctx {
-	u8 mux_id;
 	u8 mux_version;
 	u32 rx_max;
 };
@@ -63,7 +65,6 @@ static int qmi_wwan_bind(struct mhi_net *dev, const struct mhi_device_id *id)
 {
 	struct qmi_wwan_ctx *ctx = (void *)&dev->data;
 
-	ctx->mux_id = 0x81;
 	if (!strcmp(id->chan, "IP_HW0_QMAPV1"))
 		ctx->mux_version = QMAP_V1;
 	else if (!strcmp(id->chan, "IP_HW0_QMAPV5"))
@@ -80,6 +81,17 @@ static void qmi_wwan_unbind(struct mhi_net *dev)
 {
 }
 
+/* verify that the ethernet protocol is IPv4 or IPv6 */
+static bool is_ip_proto(__be16 proto)
+{
+	switch (proto) {
+	case htons(ETH_P_IP):
+	case htons(ETH_P_IPV6):
+		return true;
+	}
+	return false;
+}
+
 static struct sk_buff * qmi_wwan_tx_fixup(struct mhi_net *dev,
 				struct sk_buff *skb, gfp_t flags)
 {
@@ -87,13 +99,27 @@ static struct sk_buff * qmi_wwan_tx_fixup(struct mhi_net *dev,
 	struct qmap_hdr *qhdr;
 	struct qmap_v5_csum_hdr *qv5hdr;
 	unsigned skb_len;
+	u16 mux_id = QMAP_DEFAULT_MUX_ID;
+	bool is_ip;
+
+	if (skb->len <= ETH_HLEN)
+		goto error;
 
 	skb_reset_mac_header(skb);
 
-	if (skb_pull(skb, ETH_HLEN) == NULL) {
-		dev_kfree_skb_any (skb);
-		return NULL;
+	if (skb->len > VLAN_ETH_HLEN && __vlan_get_tag(skb, &mux_id) == 0) {
+		if (mux_id >= QMAP_DEFAULT_MUX_ID)
+			goto error;
+
+		is_ip = is_ip_proto(vlan_eth_hdr(skb)->h_vlan_encapsulated_proto);
+		skb_pull(skb, VLAN_ETH_HLEN);
+	} else {
+		is_ip = is_ip_proto(eth_hdr(skb)->h_proto);
+		skb_pull(skb, ETH_HLEN);
 	}
+
+	if (!is_ip)
+		goto error;
 
 	skb_len = skb->len;
 	if (ctx->mux_version == QMAP_V1) {
@@ -102,7 +128,7 @@ static struct sk_buff * qmi_wwan_tx_fixup(struct mhi_net *dev,
 		qhdr->pad_len = 0;
 		qhdr->next_hdr = 1;
 		qhdr->cd_bit = 0;
-		qhdr->mux_id = ctx->mux_id;
+		qhdr->mux_id = mux_id;
 		qhdr->pkt_len = cpu_to_be16(skb_len);
 	} else if (ctx->mux_version == QMAP_V5) {
 		qhdr = (struct qmap_hdr *)skb_push(skb, sizeof(*qhdr) + sizeof(*qv5hdr));
@@ -111,7 +137,7 @@ static struct sk_buff * qmi_wwan_tx_fixup(struct mhi_net *dev,
 		qhdr->pad_len = 0;
 		qhdr->next_hdr = 1;
 		qhdr->cd_bit = 0;
-		qhdr->mux_id = ctx->mux_id;
+		qhdr->mux_id = mux_id;
 		qhdr->pkt_len = cpu_to_be16(skb_len);
 
 		qv5hdr->next_hdr = 0;
@@ -120,17 +146,19 @@ static struct sk_buff * qmi_wwan_tx_fixup(struct mhi_net *dev,
 		qv5hdr->csum_valid_required = 0;
 		qv5hdr->reserved = 0;
 	} else {
-		dev_kfree_skb_any (skb);
-		return NULL;
+		goto error;
 	}
 
 	return skb;
+
+error:
+	dev_kfree_skb_any (skb);
+	return NULL;
 }
 
 static int qmi_wwan_rx_fixup(struct mhi_net *dev, struct sk_buff *skb_in)
 {
 	struct net_device *net_dev = dev->net_dev;
-	struct qmi_wwan_ctx *ctx = (void *)&dev->data;
 	struct sk_buff_head skb_chain;
 	struct sk_buff *new_skb;
 	struct qmap_hdr *qhdr;
@@ -138,7 +166,6 @@ static int qmi_wwan_rx_fixup(struct mhi_net *dev, struct sk_buff *skb_in)
 	uint pkt_len;
 	uint skb_len;
 	size_t hdr_size;
-	__be16 protocol;
 
 	__skb_queue_head_init(&skb_chain);
 
@@ -160,42 +187,43 @@ static int qmi_wwan_rx_fixup(struct mhi_net *dev, struct sk_buff *skb_in)
 		if (qhdr->cd_bit)
 			goto skip_pkt;
 
+		new_skb = netdev_alloc_skb(net_dev, skb_len + ETH_HLEN);
+		if (!new_skb)
+			goto error_pkt;
+
 		switch (skb_in->data[hdr_size] & 0xf0) {
 			case 0x40:
-				protocol = htons(ETH_P_IP);
+				new_skb->protocol = htons(ETH_P_IP);
 			break;
 			case 0x60:
-				protocol = htons(ETH_P_IPV6);
+				new_skb->protocol = htons(ETH_P_IPV6);
 			break;
 			default:
 				goto error_pkt;
 		}
-		
-		if (qhdr->mux_id != ctx->mux_id) {
-			goto error_pkt;
-		}
 
-		new_skb = netdev_alloc_skb(net_dev,  skb_len);
-		if (!new_skb)
-			goto error_pkt;
+		/* add an ethernet header */
+		skb_put(new_skb, ETH_HLEN);
+		skb_reset_mac_header(new_skb);
+		eth_hdr(new_skb)->h_proto = new_skb->protocol;
+		eth_zero_addr(eth_hdr(new_skb)->h_source);
+		memcpy(eth_hdr(new_skb)->h_dest, net_dev->dev_addr, ETH_ALEN);
 
-		skb_put(new_skb, skb_len);
-		memcpy(new_skb->data, skb_in->data + hdr_size, skb_len);
+		/* add datagram */
+		skb_put_data(new_skb, skb_in->data + hdr_size, skb_len);
 
-		skb_reset_transport_header(new_skb);
-		skb_reset_network_header(new_skb);
-		new_skb->protocol = protocol;
-		new_skb->pkt_type = PACKET_HOST;
-		skb_set_mac_header(new_skb, 0);
+		/* map mux_id to VLAN */
+		if (qhdr->mux_id != QMAP_DEFAULT_MUX_ID)
+			__vlan_hwaccel_put_tag(new_skb, htons(ETH_P_8021Q), qhdr->mux_id);
 
 		__skb_queue_tail(&skb_chain, new_skb);
-
 skip_pkt:
 		skb_pull(skb_in, pkt_len + hdr_size);
 	}
 
 error_pkt:
 	while ((new_skb = __skb_dequeue (&skb_chain))) {
+		__skb_pull(new_skb, ETH_HLEN);
 		netif_receive_skb(new_skb);
 	}
 

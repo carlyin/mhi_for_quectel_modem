@@ -3,6 +3,7 @@
 # Makefile for MHI Network drivers
 #
 
+ccflags-y += -g
 obj-$(CONFIG_MHI_NET)	+= mhi_net.o
 obj-$(CONFIG_MHI_NET_QMI_WWAN)	+= qmi_wwan.o
 obj-$(CONFIG_MHI_NET_CDC_MBIM)	+= cdc_mbim.o
