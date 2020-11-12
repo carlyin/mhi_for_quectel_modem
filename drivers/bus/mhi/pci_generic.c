@@ -163,12 +163,16 @@ static const struct mhi_channel_config modem_quectel_v1_mhi_channels[] = {
 	MHI_CHANNEL_CONFIG_DL(5, "DIAG", 16, 0, MHI_EE_AMSS, MHI_DB_BRST_DISABLE),
 	MHI_CHANNEL_CONFIG_UL(12, "MBIM", 16, 0, MHI_EE_AMSS, MHI_DB_BRST_DISABLE),
 	MHI_CHANNEL_CONFIG_DL(13, "MBIM", 16, 0, MHI_EE_AMSS, MHI_DB_BRST_DISABLE),
+	MHI_CHANNEL_CONFIG_UL(14, "QMI", 16, 0, MHI_EE_AMSS, MHI_DB_BRST_DISABLE),
+	MHI_CHANNEL_CONFIG_DL(15, "QMI", 16, 0, MHI_EE_AMSS, MHI_DB_BRST_DISABLE),
 	MHI_CHANNEL_CONFIG_UL(32, "DUN", 16, 0, MHI_EE_AMSS, MHI_DB_BRST_DISABLE),
 	MHI_CHANNEL_CONFIG_DL(33, "DUN", 16, 0, MHI_EE_AMSS, MHI_DB_BRST_DISABLE),
 	MHI_CHANNEL_CONFIG_UL(34, "EDL", 16, 0, MHI_EE_FP, MHI_DB_BRST_DISABLE),
 	MHI_CHANNEL_CONFIG_DL(35, "EDL", 16, 0, MHI_EE_FP, MHI_DB_BRST_DISABLE),
-	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0_MBIM", 512, 1, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
-	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0_MBIM", 512, 2, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
+	//MHI_CHANNEL_CONFIG_UL(100, "IP_HW0_MBIM", 512, 1, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
+	//MHI_CHANNEL_CONFIG_DL(101, "IP_HW0_MBIM", 512, 2, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
+	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0_QMAPV5", 512, 1, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
+	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0_QMAPV5", 512, 2, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
 };
 
 static const struct mhi_controller_config modem_quectel_v1_mhiv_config = {
@@ -185,7 +189,7 @@ static const struct mhi_pci_dev_info mhi_quectel_rm500_info = {
 	.edl = "firehose/prog_firehose_sdx55.mbn",
 	.config = &modem_quectel_v1_mhiv_config,
 	.bar_num = MHI_PCI_DEFAULT_BAR_NUM,
-	.dma_data_width = 32
+	.dma_data_width = 40
 };
 
 static const struct mhi_pci_dev_info mhi_quectel_em120_info = {
@@ -193,7 +197,7 @@ static const struct mhi_pci_dev_info mhi_quectel_em120_info = {
 	.edl = "firehose/prog_firehose_sdx24.mbn",
 	.config = &modem_quectel_v1_mhiv_config,
 	.bar_num = MHI_PCI_DEFAULT_BAR_NUM,
-	.dma_data_width = 32
+	.dma_data_width = 40
 };
 
 static const struct pci_device_id mhi_pci_id_table[] = {
@@ -258,8 +262,8 @@ static void mhi_pci_status_cb(struct mhi_controller *mhi_cntrl,
 		return;
 
 	/* ignore AMSS -> SBL -> PASS THRU -> AMSS */
-	if (mhi_cntrl->ee == MHI_EE_PTHRU)
-		return;
+	//if (mhi_cntrl->ee == MHI_EE_PTHRU)
+	//	return;
 
 	s_mhi_cntrl = mhi_cntrl;
 	schedule_work(&status_cb_work);
