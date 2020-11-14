@@ -255,6 +255,9 @@ struct mhi_ctxt {
 	dma_addr_t er_ctxt_addr;
 	dma_addr_t chan_ctxt_addr;
 	dma_addr_t cmd_ctxt_addr;
+	void *ctrl_seg;
+	dma_addr_t ctrl_seg_addr;
+	size_t ctrl_seg_len;
 };
 
 struct mhi_tre {
@@ -484,17 +487,14 @@ struct state_transition {
 };
 
 struct mhi_ring {
-	dma_addr_t dma_handle;
 	dma_addr_t iommu_base;
 	u64 *ctxt_wp; /* point to ctxt wp */
-	void *pre_aligned;
 	void *base;
 	void *rp;
 	void *wp;
 	size_t el_size;
 	size_t len;
 	size_t elements;
-	size_t alloc_size;
 	void __iomem *db_addr;
 };
 
