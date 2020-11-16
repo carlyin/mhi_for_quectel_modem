@@ -15,6 +15,9 @@ static void rx_alloc_submit(struct mhi_net *dev)
 	int i;
 	int ret;
 
+	if (!dev->enabled)
+		return;
+
 	no_tre = mhi_get_free_desc_count(dev->mhi_dev, DMA_FROM_DEVICE);
 
 	for (i = 0; i < no_tre; i++) {
@@ -25,12 +28,15 @@ static void rx_alloc_submit(struct mhi_net *dev)
 			break;
 		}
 
+		if (!dev->enabled)
+			break;
+
+		spin_lock_bh(&dev->rx_lock);
 		ret = mhi_queue_skb(dev->mhi_dev, DMA_FROM_DEVICE, skb,
 					 dev->mru, MHI_EOT);
+		spin_unlock_bh(&dev->rx_lock);
 
 		if (ret) {
-			net_err_ratelimited("%s: Failed to queue RX buf (%d)\n",
-					    dev->net_dev->name, ret);
 			kfree_skb(skb);
 			break;
 		}
@@ -38,9 +44,12 @@ static void rx_alloc_submit(struct mhi_net *dev)
 
 	if (no_tre > 64)
 		printk("%s %d/%d\n", "q ", i, no_tre);
-	if (i < no_tre) {
-		printk("%s %d/%d\n", "q ", i, no_tre);
-		schedule_delayed_work(&dev->rx_refill, 1);
+	if (i < no_tre && dev->enabled) {
+		no_tre = mhi_get_free_desc_count(dev->mhi_dev, DMA_FROM_DEVICE);
+		if (i < no_tre) {
+			printk("%s %d/%d\n", "q ", i, no_tre);
+			schedule_delayed_work(&dev->rx_refill, 1);
+		}
 	}
 }
 
@@ -81,17 +90,21 @@ static void dev_fetch_sw_netstats(struct rtnl_link_stats64 *s,
 int mhi_net_open (struct net_device *net)
 {
 	struct mhi_net *dev = netdev_priv(net);
-#if 0 
-	int			ret;
+	int			ret = 0;
 
-	/* Start MHI channels */
-	ret = mhi_prepare_for_transfer(dev->mhi_dev);
+	mutex_lock(&dev->chan_lock);
+	if (dev->state == 0) {
+		dev->state = 1;
+		ret = mhi_prepare_for_transfer(dev->mhi_dev);
+		dev->state = ret ? 0 : 2;
+	}
+	mutex_unlock(&dev->chan_lock);
+
 	if (ret)
 		return ret;
-	
-	rx_alloc_submit(dev);
-#endif
 
+	dev->enabled = true;
+	rx_alloc_submit(dev);
 	netif_carrier_on(net);
 	netif_start_queue (net);
 	napi_enable(&dev->napi);
@@ -105,16 +118,29 @@ int mhi_net_stop (struct net_device *net)
 	struct mhi_device *mhi_dev = dev->mhi_dev;
 	struct sk_buff *skb;
 
+	dev->enabled = false;
 	netif_stop_queue(net);
 	netif_carrier_off(net);
 	cancel_delayed_work_sync(&dev->rx_refill);
-	mhi_unprepare_from_transfer(mhi_dev);
+	mutex_lock(&dev->chan_lock);
+	if (dev->state == 2) {
+		dev->state = 0;
+		mhi_unprepare_from_transfer(mhi_dev);
+	}
+	mutex_unlock(&dev->chan_lock);
 
 	while ((skb = skb_dequeue (&dev->rx_pending)))
 		dev_kfree_skb_any(skb);
 
 	return 0;
 }
+
+/*
+* tmp for x55, if send data before QMI/MBIM data call connect,
+* will cause x55 crash.
+*/
+static int allow_xmit = 0;
+module_param(allow_xmit, int, S_IRUGO | S_IWUSR);
 
 int mhi_net_xmit(struct sk_buff *skb, struct net_device *net_dev)
 {
@@ -125,6 +151,11 @@ int mhi_net_xmit(struct sk_buff *skb, struct net_device *net_dev)
 	int err;
 
 	skb_tx_timestamp(skb);
+
+	if (!allow_xmit) {
+		printk("%s %s\n", __func__, current->comm);
+		goto drop;
+	}
 
 	no_tre = mhi_get_free_desc_count(mhi_dev, DMA_TO_DEVICE);
 	if (no_tre == 0) {
@@ -151,6 +182,8 @@ int mhi_net_xmit(struct sk_buff *skb, struct net_device *net_dev)
 	return NETDEV_TX_OK;
 
 drop:
+	if (skb)
+		dev_kfree_skb_any (skb);
 	net_dev->stats.tx_dropped++;
 
 	return NETDEV_TX_OK;
@@ -166,12 +199,16 @@ static int mhi_net_poll(struct napi_struct *napi, int budget)
 	int rx_work = 0;
 	static int max_rx_work = 0;
 
+	if (!dev->enabled) {
+		napi_complete(napi);
+		return 0;
+	}
+
 	rx_work = mhi_poll(mhi_dev, budget);
 	if (rx_work > max_rx_work) {
 		printk("rx_work=%d\n", rx_work);
 		max_rx_work = rx_work;
 	}
-
 	
 	if (rx_work < 0) {
 		napi_complete(napi);
@@ -227,6 +264,10 @@ static void mhi_net_setup(struct net_device *net_dev)
 	memcpy (net_dev->dev_addr, node_id, sizeof node_id);
 }
 
+static struct device_type wwan_type = {
+	.name	= "wwan",
+};
+
 int mhi_net_probe(struct mhi_device *mhi_dev, const struct mhi_device_id *id)
 {
 	struct mhi_net *dev;
@@ -255,6 +296,8 @@ int mhi_net_probe(struct mhi_device *mhi_dev, const struct mhi_device_id *id)
 	dev->net_dev = net;
 	dev->mru = 1500;
 
+	mutex_init(&dev->chan_lock);
+	spin_lock_init(&dev->rx_lock);
 	skb_queue_head_init(&dev->rx_pending);
 	INIT_DELAYED_WORK(&dev->rx_refill, mhi_net_rx_refill_work);
 
@@ -270,19 +313,14 @@ int mhi_net_probe(struct mhi_device *mhi_dev, const struct mhi_device_id *id)
 			goto _free_stats64;
 	}
 
+	SET_NETDEV_DEVTYPE(net, &wwan_type);
 	dev_set_drvdata(&mhi_dev->dev, dev);
-	netif_napi_add(net, &dev->napi, mhi_net_poll, NAPI_POLL_WEIGHT);
-	status = register_netdev (net);
+	netif_napi_add(net, &dev->napi, mhi_net_poll, NAPI_POLL_WEIGHT/4);
+	status = register_netdev(net);
 	if (status)
 		goto _free_stats64;
 
 	netif_device_attach (net);
-
-#if 1 
-	/* Start MHI channels */
-	mhi_prepare_for_transfer(dev->mhi_dev);
-	rx_alloc_submit(dev);
-#endif
 
 	return 0;
 
@@ -299,13 +337,19 @@ void mhi_net_remove(struct mhi_device *mhi_dev)
 {
 	struct mhi_net *dev = dev_get_drvdata(&mhi_dev->dev);
 
-	napi_disable(&dev->napi);
+	dev->enabled = false;
+	napi_disable(&dev->napi); //TODO deadlock
 	netif_napi_del(&dev->napi);
 	unregister_netdev(dev->net_dev);
 	free_percpu(dev->stats64);
 	free_netdev(dev->net_dev);
 
-	mhi_unprepare_from_transfer(dev->mhi_dev);	
+	mutex_lock(&dev->chan_lock);
+	if (dev->state == 2) {
+		dev->state = 0;
+		mhi_unprepare_from_transfer(mhi_dev);
+	}
+	mutex_unlock(&dev->chan_lock);
 }
 EXPORT_SYMBOL_GPL(mhi_net_remove);
 
@@ -319,6 +363,8 @@ void mhi_net_dl_callback(struct mhi_device *mhi_dev,
 	if (unlikely(mhi_res->transaction_status)) {
 		if (mhi_res->transaction_status != -ENOTCONN)
 			net_dev->stats.rx_errors++;
+		else
+			dev->enabled = false;
 		kfree_skb(skb);
 	} else {
 		struct pcpu_sw_netstats *stats64 = this_cpu_ptr(dev->stats64);
@@ -329,13 +375,13 @@ void mhi_net_dl_callback(struct mhi_device *mhi_dev,
 			printk("%s bytes_xferd=%u\n", __func__, bytes_xferd);
 		}
 
+		skb_put(skb, mhi_res->bytes_xferd);
+		skb_queue_tail(&dev->rx_pending, skb);
+
 		flags = u64_stats_update_begin_irqsave(&stats64->syncp);
 		stats64->rx_packets++;
 		stats64->rx_bytes += skb->len;
 		u64_stats_update_end_irqrestore(&stats64->syncp, flags);
-
-		skb_put(skb, mhi_res->bytes_xferd);
-		skb_queue_tail(&dev->rx_pending, skb);
 	}
 }
 EXPORT_SYMBOL_GPL(mhi_net_dl_callback);
@@ -350,6 +396,8 @@ void mhi_net_ul_callback(struct mhi_device *mhi_dev,
 	if (unlikely(mhi_res->transaction_status)) {
 		if (mhi_res->transaction_status != -ENOTCONN)
 			net_dev->stats.tx_errors++;
+		else
+			dev->enabled = false;
 	} else {
 		struct pcpu_sw_netstats *stats64 = this_cpu_ptr(dev->stats64);
 		unsigned long flags;
@@ -371,11 +419,11 @@ void mhi_net_status_cb(struct mhi_device *mhi_dev, enum mhi_callback mhi_cb)
 {
 	struct mhi_net *dev = dev_get_drvdata(&mhi_dev->dev);
 
-	if (mhi_cb != MHI_CB_PENDING_DATA)
-		return;
-
-	if (napi_schedule_prep(&dev->napi)) {
-		__napi_schedule(&dev->napi);
+	if (likely(mhi_cb == MHI_CB_PENDING_DATA)) {
+		if (napi_schedule_prep(&dev->napi))
+			__napi_schedule(&dev->napi);
+	} else if (mhi_cb == MHI_CB_SYS_ERROR || mhi_cb == MHI_CB_FATAL_ERROR) {
+		dev->enabled = false;
 	}
 }
 EXPORT_SYMBOL_GPL(mhi_net_status_cb);
