@@ -272,6 +272,15 @@ int mhi_pm_m0_transition(struct mhi_controller *mhi_cntrl)
 			if (mhi_event->offload_ev)
 				continue;
 
+			if (mhi_event->hw_ring) {
+				struct mhi_ring *ring = &mhi_event->ring;
+
+				ring->wp = ring->base + ring->len - ring->el_size;
+				*ring->ctxt_wp = ring->iommu_base + ring->len - ring->el_size;
+				/* Update to all cores */
+				smp_wmb();
+			}
+
 			spin_lock_irq(&mhi_event->lock);
 			mhi_ring_er_db(mhi_event);
 			spin_unlock_irq(&mhi_event->lock);
