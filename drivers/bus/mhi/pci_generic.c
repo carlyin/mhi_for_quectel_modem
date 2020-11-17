@@ -74,6 +74,7 @@ struct mhi_pci_dev_info {
 		.hardware_event = false,	\
 		.client_managed = false,	\
 		.offload_channel = false,	\
+		.channel = U32_MAX,		\
 	}
 
 #define MHI_EVENT_CONFIG_DATA(ev_ring)		\
@@ -91,7 +92,7 @@ struct mhi_pci_dev_info {
 
 #define MHI_EVENT_CONFIG_HW_OUT(ev_ring, ch_num) \
 	{					\
-		.num_elements = 1024,		\
+		.num_elements = 512,		\
 		.irq_moderation_ms = 1,		\
 		.irq = (ev_ring) + 1,		\
 		.priority = 1,			\
@@ -105,7 +106,7 @@ struct mhi_pci_dev_info {
 
 #define MHI_EVENT_CONFIG_HW_IN(ev_ring, ch_num) \
 	{					\
-		.num_elements = 1024,		\
+		.num_elements = 512,		\
 		.irq_moderation_ms = 5,		\
 		.irq = (ev_ring) + 1,		\
 		.priority = 1,			\
@@ -134,6 +135,8 @@ static const struct mhi_event_config modem_qcom_v1_mhi_events[] = {
 	/* Hardware channels request dedicated hardware event rings */
 	MHI_EVENT_CONFIG_HW_OUT(1, 100),
 	MHI_EVENT_CONFIG_HW_IN(2, 101)
+	/* If no ADPL event, when do TPUT test, will cause modem crash */
+	,MHI_EVENT_CONFIG_CTRL(3)
 };
 
 static const struct mhi_controller_config modem_qcom_v1_mhiv_config = {
@@ -169,10 +172,10 @@ static const struct mhi_channel_config modem_quectel_v1_mhi_channels[] = {
 	MHI_CHANNEL_CONFIG_DL(33, "DUN", 16, 0, MHI_EE_AMSS, MHI_DB_BRST_DISABLE),
 	MHI_CHANNEL_CONFIG_UL(34, "EDL", 16, 0, MHI_EE_FP, MHI_DB_BRST_DISABLE),
 	MHI_CHANNEL_CONFIG_DL(35, "EDL", 16, 0, MHI_EE_FP, MHI_DB_BRST_DISABLE),
-	//MHI_CHANNEL_CONFIG_UL(100, "IP_HW0_MBIM", 512, 1, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
-	//MHI_CHANNEL_CONFIG_DL(101, "IP_HW0_MBIM", 512, 2, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
-	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0_QMAPV5", 512, 1, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
-	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0_QMAPV5", 512, 2, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
+	//MHI_CHANNEL_CONFIG_UL(100, "IP_HW0_MBIM", 256, 1, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
+	//MHI_CHANNEL_CONFIG_DL(101, "IP_HW0_MBIM", 256, 2, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
+	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0_QMAPV5", 256, 1, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
+	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0_QMAPV5", 256, 2, MHI_EE_AMSS, MHI_DB_BRST_ENABLE),
 };
 
 static const struct mhi_controller_config modem_quectel_v1_mhiv_config = {
@@ -189,7 +192,7 @@ static const struct mhi_pci_dev_info mhi_quectel_rm500_info = {
 	.edl = "firehose/prog_firehose_sdx55.mbn",
 	.config = &modem_quectel_v1_mhiv_config,
 	.bar_num = MHI_PCI_DEFAULT_BAR_NUM,
-	.dma_data_width = 40
+	.dma_data_width = 37
 };
 
 static const struct mhi_pci_dev_info mhi_quectel_em120_info = {
@@ -197,7 +200,7 @@ static const struct mhi_pci_dev_info mhi_quectel_em120_info = {
 	.edl = "firehose/prog_firehose_sdx24.mbn",
 	.config = &modem_quectel_v1_mhiv_config,
 	.bar_num = MHI_PCI_DEFAULT_BAR_NUM,
-	.dma_data_width = 40
+	.dma_data_width = 37
 };
 
 static const struct pci_device_id mhi_pci_id_table[] = {
