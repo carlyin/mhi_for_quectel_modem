@@ -492,11 +492,11 @@ int mhi_init_mmio(struct mhi_controller *mhi_cntrl)
 		},
 		{
 			MHICTRLLIMIT_HIGHER, U32_MAX, 0,
-			upper_32_bits(mhi_cntrl->mhi_ctxt->ctrl_seg_addr + mhi_cntrl->mhi_ctxt->ctrl_seg_addr),
+			upper_32_bits(mhi_cntrl->mhi_ctxt->ctrl_seg_addr + mhi_cntrl->mhi_ctxt->ctrl_seg_len),
 		},
 		{
 			MHICTRLLIMIT_LOWER, U32_MAX, 0,
-			lower_32_bits(mhi_cntrl->mhi_ctxt->ctrl_seg_addr + mhi_cntrl->mhi_ctxt->ctrl_seg_addr),
+			lower_32_bits(mhi_cntrl->mhi_ctxt->ctrl_seg_addr + mhi_cntrl->mhi_ctxt->ctrl_seg_len),
 		},
 		{
 			MHIDATALIMIT_HIGHER, U32_MAX, 0,
