@@ -189,7 +189,7 @@ static const struct mhi_pci_dev_info mhi_quectel_rm500_info = {
 	.edl = "firehose/prog_firehose_sdx55.mbn",
 	.config = &modem_quectel_v1_mhiv_config,
 	.bar_num = MHI_PCI_DEFAULT_BAR_NUM,
-	.dma_data_width = 40
+	.dma_data_width = 37
 };
 
 static const struct mhi_pci_dev_info mhi_quectel_em120_info = {
@@ -197,7 +197,7 @@ static const struct mhi_pci_dev_info mhi_quectel_em120_info = {
 	.edl = "firehose/prog_firehose_sdx24.mbn",
 	.config = &modem_quectel_v1_mhiv_config,
 	.bar_num = MHI_PCI_DEFAULT_BAR_NUM,
-	.dma_data_width = 40
+	.dma_data_width = 37
 };
 
 static const struct pci_device_id mhi_pci_id_table[] = {
