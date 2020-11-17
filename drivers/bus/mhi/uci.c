@@ -313,9 +313,13 @@ static ssize_t mhi_uci_write(struct file *file,
 		void *kbuf;
 		enum mhi_flags flags;
 
-		nr_avail = mhi_get_free_desc_count(mhi_dev,DMA_TO_DEVICE);
-		if (!nr_avail && (file->f_flags & O_NONBLOCK))
-			return -EAGAIN;
+		if (udev->enabled &&
+			(file->f_flags & O_NONBLOCK) &&
+			(nr_avail = mhi_get_free_desc_count(mhi_dev,
+					   DMA_TO_DEVICE)) == 0) {
+			ret = -EAGAIN;
+			goto err_mtx_unlock;
+		}
 
 		/* wait for free descriptors */
 		ret = wait_event_interruptible(uchan->ul_wq,
@@ -404,8 +408,10 @@ static ssize_t mhi_uci_read(struct file *file,
 
 		spin_unlock_bh(&uchan->dl_pending_lock);
 
-		if (file->f_flags & O_NONBLOCK)
-			return -EAGAIN;
+		if (file->f_flags & O_NONBLOCK) {
+			ret = -EAGAIN;
+			goto err_mtx_unlock;
+		}
 
 		ret = wait_event_interruptible(uchan->dl_wq,
 					       (!udev->enabled ||
@@ -613,6 +619,7 @@ static const struct mhi_device_id mhi_uci_match_table[] = {
 	{ .chan = "EDL", .driver_data = 0x4000 },
 	{ .chan = "DIAG", .driver_data = 0x1000 },
 	{ .chan = "MBIM", .driver_data = 0x1000 },
+	{ .chan = "QMI", .driver_data = 0x1000 },
 	{ .chan = "DUN", .driver_data = 0x1000 },
 	{},
 };
