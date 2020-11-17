@@ -406,6 +406,9 @@ irqreturn_t mhi_intvec_threaded_handler(int irq_number, void *priv)
 		dev_dbg(dev, "System error detected\n");
 		pm_state = mhi_tryset_pm_state(mhi_cntrl,
 					       MHI_PM_SYS_ERR_DETECT);
+    } else if (state == MHI_STATE_READY) {
+		if (ee == MHI_EE_EDL && mhi_cntrl->ee == MHI_EE_FP)
+			mhi_queue_state_transition(mhi_cntrl, DEV_ST_TRANSITION_READY);
 	}
 	write_unlock_irq(&mhi_cntrl->pm_lock);
 
