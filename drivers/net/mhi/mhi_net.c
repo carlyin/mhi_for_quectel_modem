@@ -15,7 +15,9 @@ static void rx_alloc_submit(struct mhi_net *dev)
 	int i;
 	int ret;
 
-	if (!dev->enabled)
+	if (!test_bit(EVENT_DEV_OPEN, &dev->flags)
+		|| !test_bit(EVENT_CHAN_ENABLE, &dev->flags)
+		|| test_bit(EVENT_CHAN_HALT, &dev->flags))
 		return;
 
 	no_tre = mhi_get_free_desc_count(dev->mhi_dev, DMA_FROM_DEVICE);
@@ -28,7 +30,9 @@ static void rx_alloc_submit(struct mhi_net *dev)
 			break;
 		}
 
-		if (!dev->enabled)
+		if (!test_bit(EVENT_DEV_OPEN, &dev->flags)
+			|| !test_bit(EVENT_CHAN_ENABLE, &dev->flags)
+			|| test_bit(EVENT_CHAN_HALT, &dev->flags))
 			break;
 
 		spin_lock_bh(&dev->rx_lock);
@@ -44,7 +48,10 @@ static void rx_alloc_submit(struct mhi_net *dev)
 
 	if (no_tre > 64)
 		printk("%s %d/%d\n", "q ", i, no_tre);
-	if (i < no_tre && dev->enabled) {
+	if (i < no_tre
+		&& test_bit(EVENT_DEV_OPEN, &dev->flags)
+		&& test_bit(EVENT_CHAN_ENABLE, &dev->flags)
+		&& !test_bit(EVENT_CHAN_HALT, &dev->flags)) {
 		no_tre = mhi_get_free_desc_count(dev->mhi_dev, DMA_FROM_DEVICE);
 		if (i < no_tre) {
 			printk("%s %d/%d\n", "q ", i, no_tre);
@@ -92,18 +99,21 @@ int mhi_net_open (struct net_device *net)
 	struct mhi_net *dev = netdev_priv(net);
 	int			ret = 0;
 
+	if (test_bit(EVENT_CHAN_HALT, &dev->flags))
+		return -EIO;
+
 	mutex_lock(&dev->chan_lock);
-	if (dev->state == 0) {
-		dev->state = 1;
+	if (!test_bit(EVENT_CHAN_ENABLE, &dev->flags)) {
 		ret = mhi_prepare_for_transfer(dev->mhi_dev);
-		dev->state = ret ? 0 : 2;
+		if (!ret)
+			set_bit(EVENT_CHAN_ENABLE, &dev->flags);
 	}
 	mutex_unlock(&dev->chan_lock);
 
 	if (ret)
 		return ret;
 
-	dev->enabled = true;
+	set_bit(EVENT_DEV_OPEN, &dev->flags);
 	rx_alloc_submit(dev);
 	netif_carrier_on(net);
 	netif_start_queue (net);
@@ -118,13 +128,14 @@ int mhi_net_stop (struct net_device *net)
 	struct mhi_device *mhi_dev = dev->mhi_dev;
 	struct sk_buff *skb;
 
-	dev->enabled = false;
+	clear_bit(EVENT_DEV_OPEN, &dev->flags);
+	napi_disable(&dev->napi);
 	netif_stop_queue(net);
 	netif_carrier_off(net);
 	cancel_delayed_work_sync(&dev->rx_refill);
 	mutex_lock(&dev->chan_lock);
-	if (dev->state == 2) {
-		dev->state = 0;
+	if (test_bit(EVENT_CHAN_ENABLE, &dev->flags)) {
+		clear_bit(EVENT_CHAN_ENABLE, &dev->flags);
 		mhi_unprepare_from_transfer(mhi_dev);
 	}
 	mutex_unlock(&dev->chan_lock);
@@ -134,13 +145,6 @@ int mhi_net_stop (struct net_device *net)
 
 	return 0;
 }
-
-/*
-* tmp for x55, if send data before QMI/MBIM data call connect,
-* will cause x55 crash.
-*/
-static int allow_xmit = 0;
-module_param(allow_xmit, int, S_IRUGO | S_IWUSR);
 
 int mhi_net_xmit(struct sk_buff *skb, struct net_device *net_dev)
 {
@@ -152,10 +156,8 @@ int mhi_net_xmit(struct sk_buff *skb, struct net_device *net_dev)
 
 	skb_tx_timestamp(skb);
 
-	if (!allow_xmit) {
-		printk("%s %s\n", __func__, current->comm);
-		goto drop;
-	}
+	if (test_bit(EVENT_CHAN_HALT, &dev->flags))
+		goto drop;;
 
 	no_tre = mhi_get_free_desc_count(mhi_dev, DMA_TO_DEVICE);
 	if (no_tre == 0) {
@@ -167,14 +169,12 @@ int mhi_net_xmit(struct sk_buff *skb, struct net_device *net_dev)
 
 	if (info->tx_fixup) {
 		skb = info->tx_fixup (dev, skb, GFP_ATOMIC);
-		if (!skb) {
+		if (!skb)
 			goto drop;
-		}
 	}
 	
 	err = mhi_queue_skb(mhi_dev, DMA_TO_DEVICE, skb, skb->len, MHI_EOT);
 	if (unlikely(err)) {
-		kfree_skb(skb);
 		netif_stop_queue(net_dev);
 		goto drop;
 	}
@@ -199,7 +199,9 @@ static int mhi_net_poll(struct napi_struct *napi, int budget)
 	int rx_work = 0;
 	static int max_rx_work = 0;
 
-	if (!dev->enabled) {
+	if (!test_bit(EVENT_DEV_OPEN, &dev->flags)
+		|| !test_bit(EVENT_CHAN_ENABLE, &dev->flags)
+		|| test_bit(EVENT_CHAN_HALT, &dev->flags)) {
 		napi_complete(napi);
 		return 0;
 	}
@@ -218,9 +220,12 @@ static int mhi_net_poll(struct napi_struct *napi, int budget)
 	while ((skb = skb_dequeue (&dev->rx_pending))) {
 		if (info->rx_fixup)
 			info->rx_fixup(dev, skb);
+		else
+			consume_skb(skb);
 	}
 
-	rx_alloc_submit(dev);
+	if (!delayed_work_pending(&dev->rx_refill))
+		rx_alloc_submit(dev);
 	
 	if (rx_work < budget)
 		napi_complete(napi);
@@ -274,13 +279,10 @@ int mhi_net_probe(struct mhi_device *mhi_dev, const struct mhi_device_id *id)
 	struct net_device	 *net;
 	const struct driver_info	*info;
 	int				status;
-	const char			*name;
 
 	info = (const struct driver_info *) id->driver_data;
-	if (!info) {
-		dev_dbg (&mhi_dev->dev, "blacklisted by %s\n", name);
+	if (!info)
 		return -ENODEV;
-	}
 
 	net = alloc_netdev(sizeof(struct mhi_net),
 			       info->net_name, NET_NAME_PREDICTABLE, mhi_net_setup);
@@ -294,7 +296,7 @@ int mhi_net_probe(struct mhi_device *mhi_dev, const struct mhi_device_id *id)
 	dev->mhi_dev = mhi_dev;
 	dev->driver_info = info;
 	dev->net_dev = net;
-	dev->mru = 1500;
+	dev->mru = net->mtu;
 
 	mutex_init(&dev->chan_lock);
 	spin_lock_init(&dev->rx_lock);
@@ -337,18 +339,12 @@ void mhi_net_remove(struct mhi_device *mhi_dev)
 {
 	struct mhi_net *dev = dev_get_drvdata(&mhi_dev->dev);
 
-	dev->enabled = false;
-	napi_disable(&dev->napi); //TODO deadlock
 	netif_napi_del(&dev->napi);
 	unregister_netdev(dev->net_dev);
 	free_percpu(dev->stats64);
 	free_netdev(dev->net_dev);
 
 	mutex_lock(&dev->chan_lock);
-	if (dev->state == 2) {
-		dev->state = 0;
-		mhi_unprepare_from_transfer(mhi_dev);
-	}
 	mutex_unlock(&dev->chan_lock);
 }
 EXPORT_SYMBOL_GPL(mhi_net_remove);
@@ -363,8 +359,6 @@ void mhi_net_dl_callback(struct mhi_device *mhi_dev,
 	if (unlikely(mhi_res->transaction_status)) {
 		if (mhi_res->transaction_status != -ENOTCONN)
 			net_dev->stats.rx_errors++;
-		else
-			dev->enabled = false;
 		kfree_skb(skb);
 	} else {
 		struct pcpu_sw_netstats *stats64 = this_cpu_ptr(dev->stats64);
@@ -396,8 +390,6 @@ void mhi_net_ul_callback(struct mhi_device *mhi_dev,
 	if (unlikely(mhi_res->transaction_status)) {
 		if (mhi_res->transaction_status != -ENOTCONN)
 			net_dev->stats.tx_errors++;
-		else
-			dev->enabled = false;
 	} else {
 		struct pcpu_sw_netstats *stats64 = this_cpu_ptr(dev->stats64);
 		unsigned long flags;
@@ -423,7 +415,7 @@ void mhi_net_status_cb(struct mhi_device *mhi_dev, enum mhi_callback mhi_cb)
 		if (napi_schedule_prep(&dev->napi))
 			__napi_schedule(&dev->napi);
 	} else if (mhi_cb == MHI_CB_SYS_ERROR || mhi_cb == MHI_CB_FATAL_ERROR) {
-		dev->enabled = false;
+		set_bit(EVENT_CHAN_HALT, &dev->flags);
 	}
 }
 EXPORT_SYMBOL_GPL(mhi_net_status_cb);

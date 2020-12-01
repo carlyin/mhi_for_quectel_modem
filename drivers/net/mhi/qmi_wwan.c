@@ -81,17 +81,6 @@ static void qmi_wwan_unbind(struct mhi_net *dev)
 {
 }
 
-/* verify that the ethernet protocol is IPv4 or IPv6 */
-static bool is_ip_proto(__be16 proto)
-{
-	switch (proto) {
-	case htons(ETH_P_IP):
-	case htons(ETH_P_IPV6):
-		return true;
-	}
-	return false;
-}
-
 static struct sk_buff * qmi_wwan_tx_fixup(struct mhi_net *dev,
 				struct sk_buff *skb, gfp_t flags)
 {

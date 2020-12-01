@@ -31,8 +31,10 @@ struct mhi_net {
 
 	struct mutex chan_lock;
 	spinlock_t rx_lock;
-	bool enabled;
-	unsigned state;
+	unsigned long		flags;
+#		define EVENT_DEV_OPEN	       1
+#		define EVENT_CHAN_ENABLE	2
+#		define EVENT_CHAN_HALT  	3
 	size_t			mru;
 	unsigned long		data[5];
 };
@@ -45,4 +47,14 @@ extern void mhi_net_ul_callback(struct mhi_device *mhi_dev,
 				struct mhi_result *mhi_res);
 extern void mhi_net_status_cb(struct mhi_device *mhi_dev, enum mhi_callback mhi_cb);
 
+/* verify that the ethernet protocol is IPv4 or IPv6 */
+static inline bool is_ip_proto(__be16 proto)
+{
+	switch (proto) {
+	case htons(ETH_P_IP):
+	case htons(ETH_P_IPV6):
+		return true;
+	}
+	return false;
+}
 #endif
