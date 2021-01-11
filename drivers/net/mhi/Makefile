@@ -5,5 +5,7 @@
 
 ccflags-y += -g
 obj-$(CONFIG_MHI_NET)	+= mhi_net.o
-obj-$(CONFIG_MHI_NET_QMI_WWAN)	+= qmi_wwan.o
-obj-$(CONFIG_MHI_NET_CDC_MBIM)	+= cdc_mbim.o
+obj-$(CONFIG_MHI_NET_QMI_WWAN)	+= mhi_net_qmi_wwan.o
+mhi_net_qmi_wwan-y+=qmi_wwan.o
+obj-$(CONFIG_MHI_NET_CDC_MBIM)	+= mhi_net_cdc_mbim.o
+mhi_net_cdc_mbim-y+=cdc_mbim.o
