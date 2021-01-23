@@ -11,6 +11,9 @@
 #define MHI_UCI_DRIVER_NAME "mhi_uci"
 #define MAX_UCI_MINORS 128
 
+#define MHI_MAX_MTU 0xFFFF
+int mhi_get_free_desc_count(struct mhi_device *mhi_dev,
+				enum dma_data_direction dir);
 static DEFINE_IDR(uci_idr);
 static DEFINE_MUTEX(uci_drv_mutex);
 static struct class *uci_dev_class;
