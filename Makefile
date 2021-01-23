@@ -22,5 +22,6 @@ uninstall: clean
 	rm -rf  /lib/modules/$(shell uname -r)/kernel/drivers/mhi
 
 clean:
+	$(MAKE) -C $(KDIR) M=$(PWD)/drivers/bus/mhi clean 
 	rm -rf *~ .tmp_versions modules.order Module.symvers
 	find . -type f -name *~ -o -name *.o -o -name *.ko -o -name *.cmd -o -name *.mod.c |  xargs rm -rf
