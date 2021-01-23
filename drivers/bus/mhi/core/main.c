@@ -284,7 +284,7 @@ int mhi_destroy_device(struct device *dev, void *data)
 		put_device(&dl_chan->mhi_dev->dev);
 	}
 
-	dev_dbg(&mhi_cntrl->mhi_dev->dev, "destroy device for chan:%s\n",
+	dev_info(&mhi_cntrl->mhi_dev->dev, "destroy device for chan:%s\n",
 		 mhi_dev->name);
 
 	/* Notify the client and remove the device from MHI bus */
@@ -421,12 +421,12 @@ irqreturn_t mhi_intvec_threaded_handler(int irq_number, void *priv)
 
 	state = mhi_get_mhi_state(mhi_cntrl);
 	ee = mhi_get_exec_env(mhi_cntrl);
-	dev_dbg(dev, "local ee:%s device ee:%s dev_state:%s\n",
+	dev_info(dev, "local ee:%s device ee:%s dev_state:%s\n",
 		TO_MHI_EXEC_STR(mhi_cntrl->ee), TO_MHI_EXEC_STR(ee),
 		TO_MHI_STATE_STR(state));
 
 	if (state == MHI_STATE_SYS_ERR) {
-		dev_dbg(dev, "System error detected\n");
+		dev_info(dev, "System error detected\n");
 		pm_state = mhi_tryset_pm_state(mhi_cntrl,
 					       MHI_PM_SYS_ERR_DETECT);
 	}
@@ -750,7 +750,7 @@ int mhi_process_ctrl_ev_ring(struct mhi_controller *mhi_cntrl,
 			link_info->target_link_width =
 				MHI_TRE_GET_EV_LINKWIDTH(local_rp);
 			write_unlock_irq(&mhi_cntrl->pm_lock);
-			dev_dbg(dev, "Received BW_REQ event\n");
+			dev_info(dev, "Received BW_REQ event\n");
 			mhi_cntrl->status_cb(mhi_cntrl, MHI_CB_BW_REQ);
 			break;
 		}
@@ -760,7 +760,7 @@ int mhi_process_ctrl_ev_ring(struct mhi_controller *mhi_cntrl,
 
 			new_state = MHI_TRE_GET_EV_STATE(local_rp);
 
-			dev_dbg(dev, "State change event to state: %s\n",
+			dev_info(dev, "State change event to state: %s\n",
 				TO_MHI_STATE_STR(new_state));
 
 			switch (new_state) {
@@ -777,7 +777,7 @@ int mhi_process_ctrl_ev_ring(struct mhi_controller *mhi_cntrl,
 			{
 				enum mhi_pm_state new_state;
 
-				dev_dbg(dev, "System error detected\n");
+				dev_info(dev, "System error detected\n");
 				write_lock_irq(&mhi_cntrl->pm_lock);
 				new_state = mhi_tryset_pm_state(mhi_cntrl,
 							MHI_PM_SYS_ERR_DETECT);
@@ -801,7 +801,7 @@ int mhi_process_ctrl_ev_ring(struct mhi_controller *mhi_cntrl,
 			enum dev_st_transition st = DEV_ST_TRANSITION_MAX;
 			enum mhi_ee_type event = MHI_TRE_GET_EV_EXECENV(local_rp);
 
-			dev_dbg(dev, "Received EE event: %s\n",
+			dev_info(dev, "Received EE event: %s\n",
 				TO_MHI_EXEC_STR(event));
 			switch (event) {
 			case MHI_EE_EDL:
@@ -968,7 +968,7 @@ void mhi_ctrl_ev_task(unsigned long data)
 		write_lock_irq(&mhi_cntrl->pm_lock);
 		state = mhi_get_mhi_state(mhi_cntrl);
 		if (state == MHI_STATE_SYS_ERR) {
-			dev_dbg(dev, "System error detected\n");
+			dev_info(dev, "System error detected\n");
 			pm_state = mhi_tryset_pm_state(mhi_cntrl,
 						       MHI_PM_SYS_ERR_DETECT);
 		}
@@ -1199,7 +1199,7 @@ static void __mhi_unprepare_channel(struct mhi_controller *mhi_cntrl,
 	int ret;
 	struct device *dev = &mhi_cntrl->mhi_dev->dev;
 
-	dev_dbg(dev, "Entered: unprepare channel:%d\n", mhi_chan->chan);
+	dev_info(dev, "Entered: unprepare channel:%d\n", mhi_chan->chan);
 
 	/* no more processing events for this channel */
 	mutex_lock(&mhi_chan->mutex);
@@ -1242,7 +1242,7 @@ error_invalid_state:
 		mhi_reset_chan(mhi_cntrl, mhi_chan);
 		mhi_deinit_chan_ctxt(mhi_cntrl, mhi_chan);
 	}
-	dev_dbg(dev, "chan:%d successfully resetted\n", mhi_chan->chan);
+	dev_info(dev, "chan:%d successfully resetted\n", mhi_chan->chan);
 	mutex_unlock(&mhi_chan->mutex);
 }
 
@@ -1252,7 +1252,7 @@ int mhi_prepare_channel(struct mhi_controller *mhi_cntrl,
 	int ret = 0;
 	struct device *dev = &mhi_cntrl->mhi_dev->dev;
 
-	dev_dbg(dev, "Preparing channel: %d\n", mhi_chan->chan);
+	dev_info(dev, "Preparing channel: %d\n", mhi_chan->chan);
 
 	if (!(BIT(mhi_cntrl->ee) & mhi_chan->ee_mask)) {
 		dev_err(dev,
@@ -1267,7 +1267,7 @@ int mhi_prepare_channel(struct mhi_controller *mhi_cntrl,
 	/* If channel is not in disable state, do not allow it to start */
 	if (mhi_chan->ch_state != MHI_CH_STATE_DISABLED) {
 		ret = -EIO;
-		dev_dbg(dev, "channel: %d is not in disabled state\n",
+		dev_info(dev, "channel: %d is not in disabled state\n",
 			mhi_chan->chan);
 		goto error_init_chan;
 	}
@@ -1344,7 +1344,7 @@ int mhi_prepare_channel(struct mhi_controller *mhi_cntrl,
 
 	mutex_unlock(&mhi_chan->mutex);
 
-	dev_dbg(dev, "Chan: %d successfully moved to start state\n",
+	dev_info(dev, "Chan: %d successfully moved to start state\n",
 		mhi_chan->chan);
 
 	return 0;
@@ -1376,7 +1376,7 @@ static void mhi_mark_stale_events(struct mhi_controller *mhi_cntrl,
 	struct device *dev = &mhi_cntrl->mhi_dev->dev;
 	unsigned long flags;
 
-	dev_dbg(dev, "Marking all events for chan: %d as stale\n", chan);
+	dev_info(dev, "Marking all events for chan: %d as stale\n", chan);
 
 	ev_ring = &mhi_event->ring;
 
@@ -1395,7 +1395,7 @@ static void mhi_mark_stale_events(struct mhi_controller *mhi_cntrl,
 			local_rp = ev_ring->base;
 	}
 
-	dev_dbg(dev, "Finished marking events as stale events\n");
+	dev_info(dev, "Finished marking events as stale events\n");
 	spin_unlock_irqrestore(&mhi_event->lock, flags);
 }
 

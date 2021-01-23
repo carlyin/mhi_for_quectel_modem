@@ -498,7 +498,7 @@ int mhi_init_mmio(struct mhi_controller *mhi_cntrl)
 		{ 0, 0, 0 }
 	};
 
-	dev_dbg(dev, "Initializing MHI registers\n");
+	dev_info(dev, "Initializing MHI registers\n");
 
 	/* Read channel db offset */
 	ret = mhi_read_reg_field(mhi_cntrl, base, CHDBOFF, CHDBOFF_CHDBOFF_MASK,

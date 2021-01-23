@@ -34,7 +34,7 @@ void mhi_rddm_prepare(struct mhi_controller *mhi_cntrl,
 		bhi_vec->size = mhi_buf->len;
 	}
 
-	dev_dbg(dev, "BHIe programming for RDDM\n");
+	dev_info(dev, "BHIe programming for RDDM\n");
 
 	mhi_write_reg(mhi_cntrl, base, BHIE_RXVECADDR_HIGH_OFFS,
 		      upper_32_bits(mhi_buf->dma_addr));
@@ -49,7 +49,7 @@ void mhi_rddm_prepare(struct mhi_controller *mhi_cntrl,
 			    BHIE_RXVECDB_SEQNUM_BMSK, BHIE_RXVECDB_SEQNUM_SHFT,
 			    sequence_id);
 
-	dev_dbg(dev, "Address: %p and len: 0x%zx sequence: %u\n",
+	dev_info(dev, "Address: %p and len: 0x%zx sequence: %u\n",
 		&mhi_buf->dma_addr, mhi_buf->len, sequence_id);
 }
 
@@ -66,7 +66,7 @@ static int __mhi_download_rddm_in_panic(struct mhi_controller *mhi_cntrl)
 	void __iomem *base = mhi_cntrl->bhie;
 	struct device *dev = &mhi_cntrl->mhi_dev->dev;
 
-	dev_dbg(dev, "Entered with pm_state:%s dev_state:%s ee:%s\n",
+	dev_info(dev, "Entered with pm_state:%s dev_state:%s ee:%s\n",
 		to_mhi_pm_state_str(mhi_cntrl->pm_state),
 		TO_MHI_STATE_STR(mhi_cntrl->dev_state),
 		TO_MHI_EXEC_STR(mhi_cntrl->ee));
@@ -96,10 +96,10 @@ static int __mhi_download_rddm_in_panic(struct mhi_controller *mhi_cntrl)
 		goto error_exit_rddm;
 
 	if (ee != MHI_EE_RDDM) {
-		dev_dbg(dev, "Trigger device into RDDM mode using SYS ERR\n");
+		dev_info(dev, "Trigger device into RDDM mode using SYS ERR\n");
 		mhi_set_mhi_state(mhi_cntrl, MHI_STATE_SYS_ERR);
 
-		dev_dbg(dev, "Waiting for device to enter RDDM\n");
+		dev_info(dev, "Waiting for device to enter RDDM\n");
 		while (rddm_retry--) {
 			ee = mhi_get_exec_env(mhi_cntrl);
 			if (ee == MHI_EE_RDDM)
@@ -110,7 +110,7 @@ static int __mhi_download_rddm_in_panic(struct mhi_controller *mhi_cntrl)
 
 		if (rddm_retry <= 0) {
 			/* Hardware reset so force device to enter RDDM */
-			dev_dbg(dev,
+			dev_info(dev,
 				"Did not enter RDDM, do a host req reset\n");
 			mhi_write_reg(mhi_cntrl, mhi_cntrl->regs,
 				      MHI_SOC_RESET_REQ_OFFSET,
@@ -121,7 +121,7 @@ static int __mhi_download_rddm_in_panic(struct mhi_controller *mhi_cntrl)
 		ee = mhi_get_exec_env(mhi_cntrl);
 	}
 
-	dev_dbg(dev,
+	dev_info(dev,
 		"Waiting for RDDM image download via BHIe, current EE:%s\n",
 		TO_MHI_EXEC_STR(ee));
 
@@ -161,7 +161,7 @@ int mhi_download_rddm_image(struct mhi_controller *mhi_cntrl, bool in_panic)
 	if (in_panic)
 		return __mhi_download_rddm_in_panic(mhi_cntrl);
 
-	dev_dbg(dev, "Waiting for RDDM image download via BHIe\n");
+	dev_info(dev, "Waiting for RDDM image download via BHIe\n");
 
 	/* Wait for the image download to complete */
 	wait_event_timeout(mhi_cntrl->state_event,
@@ -192,7 +192,7 @@ static int mhi_fw_load_bhie(struct mhi_controller *mhi_cntrl,
 	}
 
 	sequence_id = MHI_RANDOM_U32_NONZERO(BHIE_TXVECSTATUS_SEQNUM_BMSK);
-	dev_dbg(dev, "Starting image download via BHIe. Sequence ID: %u\n",
+	dev_info(dev, "Starting image download via BHIe. Sequence ID: %u\n",
 		sequence_id);
 	mhi_write_reg(mhi_cntrl, base, BHIE_TXVECADDR_HIGH_OFFS,
 		      upper_32_bits(mhi_buf->dma_addr));
@@ -250,7 +250,7 @@ static int mhi_fw_load_bhi(struct mhi_controller *mhi_cntrl,
 	}
 
 	session_id = MHI_RANDOM_U32_NONZERO(BHI_TXDB_SEQNUM_BMSK);
-	dev_dbg(dev, "Starting image download via BHI. Session ID: %u\n",
+	dev_info(dev, "Starting image download via BHI. Session ID: %u\n",
 		session_id);
 	mhi_write_reg(mhi_cntrl, base, BHI_STATUS, 0);
 	mhi_write_reg(mhi_cntrl, base, BHI_IMGADDR_HIGH,
