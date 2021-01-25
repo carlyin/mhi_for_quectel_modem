@@ -141,20 +141,20 @@ static const struct mhi_pci_dev_info mhi_qcom_sdx55_info = {
 };
 
 static const struct mhi_channel_config modem_quectel_v1_mhi_channels[] = {
-	MHI_CHANNEL_CONFIG_UL(0, "LOOPBACK", 16, 0, MHI_EE_AMSS),
-	MHI_CHANNEL_CONFIG_DL(1, "LOOPBACK", 16, 0, MHI_EE_AMSS),
+	//MHI_CHANNEL_CONFIG_UL(0, "LOOPBACK", 16, 0, MHI_EE_AMSS),
+	//MHI_CHANNEL_CONFIG_DL(1, "LOOPBACK", 16, 0, MHI_EE_AMSS),
 	MHI_CHANNEL_CONFIG_UL(2, "SAHARA", 16, 0, MHI_EE_SBL),
 	MHI_CHANNEL_CONFIG_DL(3, "SAHARA", 16, 0, MHI_EE_SBL),
 	MHI_CHANNEL_CONFIG_UL(4, "DIAG", 16, 0, MHI_EE_AMSS),
 	MHI_CHANNEL_CONFIG_DL(5, "DIAG", 16, 0, MHI_EE_AMSS),
-	MHI_CHANNEL_CONFIG_UL(12, "MBIM", 16, 0, MHI_EE_AMSS),
-	MHI_CHANNEL_CONFIG_DL(13, "MBIM", 16, 0, MHI_EE_AMSS),
-	MHI_CHANNEL_CONFIG_UL(32, "DUN", 16, 0, MHI_EE_AMSS),
-	MHI_CHANNEL_CONFIG_DL(33, "DUN", 16, 0, MHI_EE_AMSS),
+	//MHI_CHANNEL_CONFIG_UL(12, "MBIM", 16, 0, MHI_EE_AMSS),
+	//MHI_CHANNEL_CONFIG_DL(13, "MBIM", 16, 0, MHI_EE_AMSS),
+	//MHI_CHANNEL_CONFIG_UL(32, "DUN", 16, 0, MHI_EE_AMSS),
+	//MHI_CHANNEL_CONFIG_DL(33, "DUN", 16, 0, MHI_EE_AMSS),
 	MHI_CHANNEL_CONFIG_UL(34, "EDL", 16, 0, MHI_EE_FP),
 	MHI_CHANNEL_CONFIG_DL(35, "EDL", 16, 0, MHI_EE_FP),
-	MHI_CHANNEL_CONFIG_UL(100, "IP_HW0_MBIM", 128, 1, MHI_EE_AMSS),
-	MHI_CHANNEL_CONFIG_DL(101, "IP_HW0_MBIM", 128, 2, MHI_EE_AMSS),
+	//MHI_CHANNEL_CONFIG_UL(100, "IP_HW0_MBIM", 128, 1, MHI_EE_AMSS),
+	//MHI_CHANNEL_CONFIG_DL(101, "IP_HW0_MBIM", 128, 2, MHI_EE_AMSS),
 };
 
 static const struct mhi_controller_config modem_quectel_v1_mhiv_config = {
@@ -176,7 +176,7 @@ static const struct mhi_pci_dev_info mhi_quectel_rm500_info = {
 
 static const struct mhi_pci_dev_info mhi_quectel_em120_info = {
 	.name = "quectel-em120",
-	.edl = "firehose/prog_firehose_em120.mbn",
+	.edl = "firehose/prog_firehose_sdx24.mbn",
 	.config = &modem_quectel_v1_mhiv_config,
 	.bar_num = MHI_PCI_DEFAULT_BAR_NUM,
 	.dma_data_width = 37
@@ -206,10 +206,53 @@ static void mhi_pci_write_reg(struct mhi_controller *mhi_cntrl,
 	writel(val, addr);
 }
 
+static struct mhi_controller *s_mhi_cntrl = NULL;
+static void mhi_pci_status_cb_work_func(struct work_struct *bullshit)
+{
+	struct mhi_controller *mhi_cntrl = s_mhi_cntrl;
+	int err;
+
+	mhi_power_down(mhi_cntrl, true);
+	mhi_unprepare_after_power_down(mhi_cntrl);
+	err = mhi_prepare_for_power_up(mhi_cntrl);
+	if (err) {
+		dev_err(mhi_cntrl->cntrl_dev, "failed to prepare MHI controller\n");
+	}
+	else {
+		err = mhi_async_power_up(mhi_cntrl);
+		if (err) {
+			dev_err(mhi_cntrl->cntrl_dev, "failed to power up MHI controller\n");
+		}
+	}
+}
+
+static DECLARE_WORK(status_cb_work, mhi_pci_status_cb_work_func);
+
+
 static void mhi_pci_status_cb(struct mhi_controller *mhi_cntrl,
 			      enum mhi_callback cb)
 {
-	/* Nothing to do for now */
+    const char * cb_str[] = {
+        "IDLE", "PENDING_DATA", "LPM_ENTER", "LPM_EXIT",
+        "EE_RDDM", "EE_MISSION_MODE", "SYS_ERROR",
+        "FATAL_ERROR", "BW_REQ", "MAX"};
+
+    const char * ee_str[] = {
+	"PBL", "SBL", "AMSS", "RDDM", "WFW", "PTHRU", "EDL",
+	"FP", "DISABLE_TRANSITION", "MAX"};
+
+	dev_info(mhi_cntrl->cntrl_dev, "status_cb ee=%s, cb=%s\n", ee_str[mhi_cntrl->ee], cb_str[cb]);
+
+	if (cb != MHI_CB_FATAL_ERROR)
+		return;
+
+	/* ignore AMSS -> SBL -> PASS THRU -> AMSS */
+	//if (mhi_cntrl->ee == MHI_EE_PTHRU)
+	//	return;
+
+	s_mhi_cntrl = mhi_cntrl;
+	schedule_work(&status_cb_work);
+	return;
 }
 
 static int mhi_pci_claim(struct mhi_controller *mhi_cntrl,

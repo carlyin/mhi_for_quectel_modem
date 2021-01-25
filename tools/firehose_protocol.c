@@ -834,7 +834,7 @@ int firehose_main (const char *firehose_dir, int edl_fd) {
 }
 
 int main(int argc, char *argv[]) {
-	const char *mhi_dev = "0000:03:00.0";
+	const char *mhi_dev = "0000:02:00.0";
 	char mhi_chan[64];
 	const char *firehose_dir = NULL;
 	int fd;
